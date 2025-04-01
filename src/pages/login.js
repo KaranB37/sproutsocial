@@ -100,6 +100,7 @@ export default function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   placeholder="Enter your username"
+                  className="text-white"
                 />
               </div>
               <div className="grid gap-2">
@@ -110,6 +111,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="text-white"
                   placeholder="Enter your password"
                 />
               </div>
