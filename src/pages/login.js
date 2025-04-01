@@ -21,6 +21,7 @@ export default function LoginPage() {
     if (isAuthenticated()) {
       console.log("User is already authenticated, redirecting to home...");
       router.push("/"); // Redirect to home if already logged in
+      // cba
     }
   }, [isAuthenticated, router]);
 
