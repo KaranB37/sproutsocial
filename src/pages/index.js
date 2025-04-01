@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCustomerId, getProfiles } from "@/api/profiles";
-import ProfileCard from "@/components/ProfileCard";
-import Analytics from "@/components/Analytics";
+import Dashboard from "@/components/Dashboard";
 
 export default function Home() {
   const [profiles, setProfiles] = useState([]);
@@ -29,7 +28,7 @@ export default function Home() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg">Loading...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -49,34 +48,5 @@ export default function Home() {
     );
   }
 
-  // Group profiles by network type
-  const groupedProfiles = profiles.reduce((acc, profile) => {
-    const type = profile.network_type;
-    if (!acc[type]) acc[type] = [];
-    acc[type].push(profile);
-    return acc;
-  }, {});
-
-  return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          Social Media Profiles
-        </h1>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Object.entries(groupedProfiles).map(([networkType, profiles]) => (
-            <ProfileCard
-              key={networkType}
-              networkType={networkType}
-              profiles={profiles}
-            />
-          ))}
-        </div>
-      </div>
-      {profiles.length > 0 && (
-        <Analytics profiles={profiles} customerId={customerId} />
-      )}
-    </div>
-  );
+  return <Dashboard profiles={profiles} customerId={customerId} />;
 }

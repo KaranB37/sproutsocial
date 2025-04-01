@@ -2,715 +2,764 @@ import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { getProfileAnalytics } from "@/api/analytics";
 import { getNetworkFormatter } from "@/utils/analyticsFormatters";
+import { groupDataByReportingPeriod } from "@/utils/reportingPeriodUtils";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button.jsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format, isValid } from "date-fns";
+import { CalendarIcon, BarChart3, Loader2 } from "lucide-react";
 
+// Define reporting period options
+const REPORTING_PERIODS = [
+  { id: "daily", label: "Daily" },
+  { id: "monthly", label: "Monthly" },
+  { id: "quarterly", label: "Quarterly (FY)" },
+  { id: "yearly", label: "Yearly (FY)" },
+];
+
+// Network display name mapping - remove the duplicate Facebook entry
+const NETWORK_DISPLAY_NAMES = {
+  fb_instagram_account: "Instagram",
+  linkedin_company: "LinkedIn",
+  fb_page: "Facebook",
+  threads: "Threads",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  twitter: "Twitter",
+};
+
+// Updated comprehensive network metrics based on Sprout Social API
 const NETWORK_METRICS = {
-  threads: [
-    {
-      id: "lifetime_snapshot.followers_by_age_gender",
-      label: "Followers by age/gender",
-    },
-    { id: "lifetime_snapshot.followers_by_city", label: "Followers by city" },
-    {
-      id: "lifetime_snapshot.followers_by_country",
-      label: "Followers by country",
-    },
-    { id: "likes", label: "Likes" },
-    { id: "profile_views", label: "Profile views" },
-    { id: "quotes_count", label: "Quotes" },
-    { id: "comments_count", label: "Replies" },
-    { id: "reposts_count", label: "Reposts" },
-    { id: "shares_count", label: "Shares" },
-  ],
-  tiktok: [
-    { id: "comments_count_total", label: "Comments" },
-    {
-      id: "lifetime_snapshot.followers_by_country",
-      label: "Followers by country",
-    },
-    {
-      id: "lifetime_snapshot.followers_by_gender",
-      label: "Followers by gender",
-    },
-    { id: "lifetime_snapshot.followers_count", label: "Followers count" },
-    { id: "lifetime_snapshot.followers_online", label: "Followers online" },
-    { id: "likes_total", label: "Likes" },
-    { id: "net_follower_growth", label: "Net follower growth" },
-    { id: "posts_sent_by_post_type", label: "Posts by type" },
-    { id: "posts_sent_count", label: "Posts count" },
-    { id: "profile_views_total", label: "Profile views" },
-    { id: "shares_count_total", label: "Shares" },
-    { id: "video_views_total", label: "Video views" },
-  ],
-  linkedin_company: [
-    { id: "lifetime_snapshot.followers_count", label: "Followers count" },
-    { id: "net_follower_growth", label: "Net follower growth" },
-    { id: "followers_gained", label: "Followers gained" },
-    { id: "followers_gained_organic", label: "Organic followers gained" },
-    { id: "followers_gained_paid", label: "Paid followers gained" },
-    { id: "followers_lost", label: "Followers lost" },
-    { id: "lifetime_snapshot.fans_count", label: "Fans count" },
-    { id: "fans_gained", label: "Page likes" },
-    { id: "fans_gained_organic", label: "Organic page likes" },
-    { id: "fans_gained_paid", label: "Paid page likes" },
-    { id: "fans_lost", label: "Page unlikes" },
-    { id: "impressions", label: "Impressions" },
-    { id: "impressions_organic", label: "Organic impressions" },
-    { id: "impressions_viral", label: "Viral impressions" },
-    { id: "impressions_nonviral", label: "Non-viral impressions" },
-    { id: "impressions_paid", label: "Paid impressions" },
-    { id: "impressions_unique", label: "Unique impressions" },
-    { id: "post_content_clicks", label: "Content clicks" },
-    { id: "reactions", label: "Reactions" },
-    { id: "comments_count", label: "Comments" },
-    { id: "shares_count", label: "Shares" },
-    { id: "posts_sent_count", label: "Posts sent" },
-    { id: "posts_sent_by_content_type", label: "Posts by content type" },
-    { id: "posts_sent_by_post_type", label: "Posts by post type" },
-    { id: "followers_by_job_function", label: "Followers by job function" },
-    { id: "followers_by_seniority", label: "Followers by seniority" },
-  ],
-  twitter: [
-    { id: "lifetime_snapshot.followers_count", label: "Followers count" },
-    { id: "net_follower_growth", label: "Net follower growth" },
-    { id: "impressions", label: "Impressions" },
-    { id: "post_media_views", label: "Media views" },
-    { id: "video_views", label: "Video views" },
-    { id: "reactions", label: "Reactions" },
-    { id: "likes", label: "Likes" },
-    { id: "comments_count", label: "@Replies" },
-    { id: "shares_count", label: "Reposts" },
-  ],
   facebook: [
-    { id: "lifetime_snapshot.followers_count", label: "Followers count" },
-    { id: "net_follower_growth", label: "Net follower growth" },
-    { id: "followers_gained", label: "Followers gained" },
-    { id: "followers_gained_organic", label: "Organic followers gained" },
-    { id: "followers_gained_paid", label: "Paid followers gained" },
-    { id: "followers_lost", label: "Followers lost" },
-    { id: "lifetime_snapshot.fans_count", label: "Fans count" },
-    { id: "fans_gained", label: "Page likes" },
-    { id: "fans_gained_organic", label: "Organic page likes" },
-    { id: "fans_gained_paid", label: "Paid page likes" },
-    { id: "fans_lost", label: "Page unlikes" },
+    { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "net_follower_growth", label: "Net Follower Growth" },
+    { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_lost", label: "Followers Lost" },
     { id: "impressions", label: "Impressions" },
-    { id: "impressions_organic", label: "Organic impressions" },
-    { id: "impressions_viral", label: "Viral impressions" },
-    { id: "impressions_nonviral", label: "Non-viral impressions" },
-    { id: "impressions_paid", label: "Paid impressions" },
+    { id: "reach", label: "Reach" },
+    { id: "engagement", label: "Engagement" },
+    { id: "posts_sent_count", label: "Posts Sent Count" },
   ],
   fb_instagram_account: [
-    { id: "lifetime_snapshot.followers_count", label: "Total followers" },
-    {
-      id: "lifetime_snapshot.followers_by_age_gender",
-      label: "Demographic breakdown by age/gender",
-    },
-    {
-      id: "lifetime_snapshot.followers_by_city",
-      label: "Demographic breakdown by city",
-    },
-    {
-      id: "lifetime_snapshot.followers_by_country",
-      label: "Demographic breakdown by country",
-    },
-    { id: "net_follower_growth", label: "Net change in followers" },
-    { id: "followers_gained", label: "New followers gained" },
-    { id: "followers_lost", label: "Followers lost" },
-    { id: "lifetime_snapshot.following_count", label: "Accounts following" },
-    { id: "net_following_growth", label: "Net change in following count" },
-    { id: "impressions", label: "Total impressions" },
-    { id: "impressions_unique", label: "Reach (unique viewers)" },
-    { id: "video_views", label: "Video views" },
-    { id: "reactions", label: "All reactions" },
-    { id: "likes", label: "Likes" },
-    { id: "comments_count", label: "Comments" },
-    { id: "saves", label: "Content saves" },
-    { id: "shares_count", label: "Content shares" },
-    { id: "story_replies", label: "Replies to stories" },
-    { id: "posts_sent_count", label: "Number of posts sent" },
-    { id: "posts_sent_by_post_type", label: "Posts by type" },
-    { id: "posts_sent_by_content_type", label: "Posts by content category" },
+    { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "net_follower_growth", label: "Net Follower Growth" },
+    { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_lost", label: "Followers Lost" },
+    { id: "impressions", label: "Impressions" },
+    { id: "reach", label: "Reach" },
+    { id: "profile_views", label: "Profile Views" },
+    { id: "website_clicks", label: "Website Clicks" },
+    { id: "posts_sent_count", label: "Posts Sent Count" },
+  ],
+  linkedin_company: [
+    { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "net_follower_growth", label: "Net Follower Growth" },
+    { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_lost", label: "Followers Lost" },
+    { id: "impressions", label: "Impressions" },
+    { id: "engagement", label: "Engagement" },
+    { id: "clicks", label: "Clicks" },
+    { id: "reactions", label: "Reactions" },
+    { id: "comments", label: "Comments" },
+    { id: "shares", label: "Shares" },
+    { id: "posts_sent_count", label: "Posts Sent Count" },
   ],
   youtube: [
-    { id: "lifetime_snapshot.subscribers_count", label: "Subscribers count" },
-    { id: "net_subscriber_growth", label: "Net subscriber growth" },
-    { id: "subscribers_gained", label: "Subscribers gained" },
-    { id: "subscribers_lost", label: "Subscribers lost" },
-    { id: "video_views", label: "Video views" },
-    { id: "watch_time", label: "Watch time" },
+    { id: "lifetime_snapshot.followers_count", label: "Subscribers" },
+    { id: "net_follower_growth", label: "Net Subscriber Growth" },
+    { id: "followers_gained", label: "Subscribers Gained" },
+    { id: "followers_lost", label: "Subscribers Lost" },
+    { id: "views", label: "Views" },
+    { id: "watch_time", label: "Watch Time (hours)" },
     { id: "likes", label: "Likes" },
-    { id: "comments_count", label: "Comments" },
-    { id: "shares_count", label: "Shares" },
+    { id: "comments", label: "Comments" },
+    { id: "shares", label: "Shares" },
+    { id: "posts_sent_count", label: "Videos Published" },
+  ],
+  twitter: [
+    { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "net_follower_growth", label: "Net Follower Growth" },
+    { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_lost", label: "Followers Lost" },
+    { id: "impressions", label: "Impressions" },
+    { id: "engagement", label: "Engagement" },
+    { id: "url_clicks", label: "URL Clicks" },
+    { id: "retweets", label: "Retweets" },
+    { id: "replies", label: "Replies" },
+    { id: "likes", label: "Likes" },
+    { id: "posts_sent_count", label: "Posts Sent Count" },
+  ],
+  tiktok: [
+    { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "net_follower_growth", label: "Net Follower Growth" },
+    { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_lost", label: "Followers Lost" },
+    { id: "video_views", label: "Video Views" },
+    { id: "profile_views", label: "Profile Views" },
+    { id: "likes", label: "Likes" },
+    { id: "comments", label: "Comments" },
+    { id: "shares", label: "Shares" },
+    { id: "posts_sent_count", label: "Videos Published" },
+  ],
+  threads: [
+    { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "net_follower_growth", label: "Net Follower Growth" },
+    { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_lost", label: "Followers Lost" },
+    { id: "impressions", label: "Impressions" },
+    { id: "likes", label: "Likes" },
+    { id: "reposts", label: "Reposts" },
+    { id: "posts_sent_count", label: "Posts Sent Count" },
   ],
 };
 
-export default function Analytics({ profiles, customerId }) {
-  const [selectedNetwork, setSelectedNetwork] = useState("");
+const Analytics = ({ profiles, customerId }) => {
+  // State for form inputs
+  const [reportingPeriod, setReportingPeriod] = useState("daily");
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [selectedNetworkType, setSelectedNetworkType] = useState("");
   const [selectedProfiles, setSelectedProfiles] = useState([]);
-  const [selectedMetrics, setSelectedMetrics] = useState([]);
-  const [dateRange, setDateRange] = useState({
-    start: "",
-    end: "",
-  });
+  const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({});
   const [loading, setLoading] = useState(false);
-  const [availableNetworks, setAvailableNetworks] = useState([]);
+  const [error, setError] = useState(null);
+  const [showConfigPanel, setShowConfigPanel] = useState(true);
+  const [selectedNetworks, setSelectedNetworks] = useState([]);
+  const [showNetworkSelector, setShowNetworkSelector] = useState(false);
 
-  useEffect(() => {
-    console.log("Profiles received in Analytics:", profiles);
-
-    if (profiles && Array.isArray(profiles) && profiles.length > 0) {
-      // Extract unique networks from profiles using network_type
-      const networks = [
-        ...new Set(
-          profiles
-            .filter((profile) => profile && profile.network_type)
-            .map((profile) => profile.network_type)
-        ),
-      ];
-
-      console.log("Extracted networks:", networks);
-
-      if (networks.length > 0) {
-        setAvailableNetworks(networks);
-        setSelectedNetwork(networks[0]);
-      }
+  // Safe date formatting function
+  const safeFormat = (date, formatStr) => {
+    if (!date || !isValid(date)) return "";
+    try {
+      return format(date, formatStr);
+    } catch (e) {
+      console.error("Date formatting error:", e);
+      return "";
     }
-  }, [profiles]);
+  };
 
-  // When network changes, reset selected metrics
-  useEffect(() => {
-    if (selectedNetwork && NETWORK_METRICS[selectedNetwork]) {
-      // Auto-select all metrics for the selected network
-      handleSelectAllMetrics();
-    }
-  }, [selectedNetwork]);
+  // Filter profiles by selected network type
+  const filteredProfiles = profiles.filter(
+    (profile) =>
+      profile.network_type === selectedNetworkType ||
+      // Handle Facebook's different network types
+      (selectedNetworkType === "facebook" &&
+        (profile.network_type === "fb_page" ||
+          profile.network_type === "facebook"))
+  );
 
-  const handleNetworkChange = (e) => {
-    setSelectedNetwork(e.target.value);
+  // Handle network type selection
+  const handleNetworkTypeChange = (value) => {
+    setSelectedNetworkType(value);
     setSelectedProfiles([]);
-    setSelectedMetrics([]);
+    setSelectedMetricsByNetwork({});
   };
 
-  const handleProfileToggle = (profileId) => {
-    if (selectedProfiles.includes(profileId)) {
-      setSelectedProfiles(selectedProfiles.filter((id) => id !== profileId));
-    } else {
-      setSelectedProfiles([...selectedProfiles, profileId]);
-    }
-  };
-
-  const handleMetricToggle = (metricId) => {
-    if (selectedMetrics.includes(metricId)) {
-      setSelectedMetrics(selectedMetrics.filter((id) => id !== metricId));
-    } else {
-      setSelectedMetrics([...selectedMetrics, metricId]);
-    }
-  };
-
-  const handleSelectAllMetrics = () => {
-    if (selectedNetwork && NETWORK_METRICS[selectedNetwork]) {
-      const allMetricIds = NETWORK_METRICS[selectedNetwork].map(
-        (metric) => metric.id
-      );
-      setSelectedMetrics(allMetricIds);
-    }
-  };
-
-  const handleClearAllMetrics = () => {
-    setSelectedMetrics([]);
-  };
-
-  // Filter profiles by selected network safely
-  const getProfilesByNetwork = () => {
-    if (!profiles || !Array.isArray(profiles) || !selectedNetwork) return [];
-    return profiles.filter(
-      (profile) => profile && profile.network_type === selectedNetwork
-    );
-  };
-
-  // Get available metrics for the selected network
-  const getAvailableMetrics = () => {
-    if (!selectedNetwork || !NETWORK_METRICS[selectedNetwork]) return [];
-    return NETWORK_METRICS[selectedNetwork];
-  };
-
-  // Function to flatten nested objects with dot notation
-  const flattenObject = (obj, prefix = "") => {
-    if (!obj || typeof obj !== "object" || obj === null) return {};
-
-    return Object.keys(obj).reduce((acc, key) => {
-      const pre = prefix.length ? `${prefix}.` : "";
-
-      if (
-        typeof obj[key] === "object" &&
-        obj[key] !== null &&
-        !Array.isArray(obj[key])
-      ) {
-        Object.assign(acc, flattenObject(obj[key], `${pre}${key}`));
+  // Handle profile selection
+  const handleProfileSelection = (profileId) => {
+    setSelectedProfiles((prev) => {
+      if (prev.includes(profileId)) {
+        return prev.filter((id) => id !== profileId);
       } else {
-        acc[`${pre}${key}`] = obj[key];
+        return [...prev, profileId];
       }
-
-      return acc;
-    }, {});
-  };
-
-  // Flatten the data for Excel export
-  const flattenData = (data) => {
-    if (!data || !Array.isArray(data)) return [];
-
-    return data.map((item) => {
-      const flattenedItem = {};
-
-      // Flatten dimensions
-      if (item.dimensions) {
-        Object.entries(item.dimensions).forEach(([key, value]) => {
-          // For date fields, format them nicely
-          if (key === "reporting_period.by(day)") {
-            flattenedItem["Date"] = value;
-          } else {
-            flattenedItem[`dimension.${key}`] = value;
-          }
-        });
-      }
-
-      // Flatten metrics - only include selected metrics
-      if (item.metrics) {
-        Object.entries(item.metrics).forEach(([key, value]) => {
-          // Only include metrics that were selected
-          if (selectedMetrics.includes(key)) {
-            if (value === null) {
-              flattenedItem[`metric.${key}`] = null;
-            } else if (typeof value === "object" && !Array.isArray(value)) {
-              // Handle nested objects like posts_sent_by_post_type
-              const flattened = flattenObject(value);
-              Object.entries(flattened).forEach(([nestedKey, nestedValue]) => {
-                flattenedItem[`metric.${key}.${nestedKey}`] = nestedValue;
-              });
-            } else if (Array.isArray(value)) {
-              // Handle array values
-              flattenedItem[`metric.${key}`] = JSON.stringify(value);
-            } else {
-              flattenedItem[`metric.${key}`] = value;
-            }
-          }
-        });
-      }
-
-      return flattenedItem;
     });
   };
 
-  const handleDownload = async () => {
-    if (selectedProfiles.length === 0) {
-      alert("Please select at least one profile");
-      return;
-    }
+  // Handle metric selection
+  const handleMetricSelection = (networkType, metricId) => {
+    setSelectedMetricsByNetwork((prev) => {
+      const networkMetrics = prev[networkType] || [];
 
-    if (selectedMetrics.length === 0) {
-      alert("Please select at least one metric");
-      return;
-    }
+      // Toggle the metric for this specific network
+      const updatedNetworkMetrics = networkMetrics.includes(metricId)
+        ? networkMetrics.filter((id) => id !== metricId)
+        : [...networkMetrics, metricId];
 
-    if (!dateRange.start || !dateRange.end) {
-      alert("Please select a date range");
-      return;
-    }
+      return {
+        ...prev,
+        [networkType]: updatedNetworkMetrics,
+      };
+    });
+  };
 
+  // Handle adding a network
+  const handleAddNetwork = (networkType) => {
+    if (!selectedNetworks.includes(networkType)) {
+      setSelectedNetworks([...selectedNetworks, networkType]);
+    }
+    setShowNetworkSelector(false);
+  };
+
+  // Aggregate data by reporting period (daily, monthly, quarterly, yearly)
+  const aggregateDataByPeriod = (data, reportingPeriod) => {
+    // If daily or no data, return as is
+    if (reportingPeriod === "daily" || !data || data.length === 0) {
+      return data;
+    }
+    
+    // Use the utility function to group data by reporting period
+    // Pass start and end dates to ensure all periods in the range are included
+    return groupDataByReportingPeriod(data, reportingPeriod, startDate, endDate);
+  };
+
+  /**
+   * Generate the analytics report based on selected options
+   */
+  const generateReport = async () => {
     setLoading(true);
+    setError(null);
 
     try {
-      console.log("Fetching analytics for profiles:", selectedProfiles);
-      console.log("Selected metrics:", selectedMetrics);
-
-      // Pass the customer_profile_id values and selected metrics to the API
-      const response = await getProfileAnalytics(
-        customerId,
-        selectedProfiles,
-        selectedMetrics,
-        dateRange.start,
-        dateRange.end
+      // Fix timezone issues by using date strings in local time
+      // This ensures selected dates aren't shifted due to timezone conversion
+      const formattedStartDate = new Date(startDate);
+      const startYear = formattedStartDate.getFullYear();
+      const startMonth = String(formattedStartDate.getMonth() + 1).padStart(
+        2,
+        "0"
       );
+      const startDay = String(formattedStartDate.getDate()).padStart(2, "0");
+      const startDateStr = `${startYear}-${startMonth}-${startDay}`;
 
-      console.log("API Response:", response);
+      const formattedEndDate = new Date(endDate);
+      const endYear = formattedEndDate.getFullYear();
+      const endMonth = String(formattedEndDate.getMonth() + 1).padStart(2, "0");
+      const endDay = String(formattedEndDate.getDate()).padStart(2, "0");
+      const endDateStr = `${endYear}-${endMonth}-${endDay}`;
 
-      if (!response || !response.data) {
-        throw new Error("Invalid API response format");
-      }
+      console.log(`Original dates: ${startDate} to ${endDate}`);
+      console.log(`Formatted dates: ${startDateStr} to ${endDateStr}`);
+      console.log(`Selected reporting period: ${reportingPeriod}`);
 
-      // Get the appropriate formatter for the selected network
-      const formatter = getNetworkFormatter(selectedNetwork);
+      // Collect all selected profiles and their corresponding metrics by network
+      const reportData = [];
 
-      // Format the data using the network-specific formatter
-      const formattedData = formatter(response, selectedMetrics);
-      console.log("Formatted data:", formattedData);
+      // Process each network separately
+      for (const networkType of selectedNetworks) {
+        const networkProfiles = selectedProfiles.filter((profileId) => {
+          const profile = profiles.find(
+            (p) => p.customer_profile_id === profileId
+          );
+          return (
+            profile &&
+            (profile.network_type === networkType ||
+              // Handle Facebook's different network types
+              (networkType === "facebook" &&
+                (profile.network_type === "fb_page" ||
+                  profile.network_type === "facebook")))
+          );
+        });
 
-      if (formattedData.length === 0) {
-        alert("No data available for the selected criteria");
-        setLoading(false);
-        return;
-      }
+        // Skip if no profiles selected for this network
+        if (networkProfiles.length === 0) continue;
 
-      // Calculate totals for numeric fields
-      const totalsRow = { Date: "TOTAL", "Profile ID": "" };
+        // Get the metrics selected for this network
+        const networkMetrics = selectedMetricsByNetwork[networkType] || [];
 
-      // Get all column headers
-      const headers = Object.keys(formattedData[0]);
+        // Skip if no metrics selected for this network
+        if (networkMetrics.length === 0) continue;
 
-      // Calculate totals for each numeric column
-      headers.forEach((header) => {
-        if (header !== "Date" && header !== "Profile ID") {
-          // Check if this is a numeric column by examining the first non-null value
-          const firstNonNullValue = formattedData.find(
-            (row) => row[header] !== null
-          )?.[header];
+        try {
+          // Fetch data for this network
+          // Always request daily data from the API, we'll aggregate it later based on reportingPeriod
+          const response = await getProfileAnalytics({
+            customerId,
+            profileId: networkProfiles,
+            startDate: startDateStr,
+            endDate: endDateStr,
+            reportingPeriod: "daily", // Always request daily data from API
+            metrics: networkMetrics,
+          });
 
-          if (typeof firstNonNullValue === "number") {
-            // Sum up all numeric values in this column
-            totalsRow[header] = formattedData.reduce((sum, row) => {
-              return sum + (row[header] !== null ? row[header] : 0);
-            }, 0);
-          } else if (
-            typeof firstNonNullValue === "string" &&
-            (firstNonNullValue.startsWith("{") ||
-              firstNonNullValue.startsWith("["))
-          ) {
-            // For JSON strings (objects/arrays), don't calculate totals
-            totalsRow[header] = "N/A";
-          } else {
-            totalsRow[header] = "";
+          // Check if the response has the expected structure
+          if (!response || !response.data) {
+            console.error(
+              `Invalid response format for ${networkType}:`,
+              response
+            );
+            continue;
           }
+
+          // Format the data using the appropriate formatter
+          const formatter = getNetworkFormatter(networkType);
+          const formattedData = formatter(response, networkMetrics);
+
+          // Log the formatted data for debugging
+          console.log(
+            `Formatted data for ${networkType}:`,
+            formattedData.length,
+            "rows"
+          );
+
+          // Aggregate data by reporting period
+          const aggregatedData = aggregateDataByPeriod(
+            formattedData,
+            reportingPeriod
+          );
+
+          // Add to the combined report data
+          reportData.push(...aggregatedData);
+        } catch (networkError) {
+          console.error(
+            `Error fetching data for ${networkType}:`,
+            networkError
+          );
+          // Continue with other networks even if one fails
         }
+      }
+
+      // Group data by network and profile for Excel export
+      const dataByNetworkAndProfile = {};
+
+      // Process each data point and organize by network and profile
+      reportData.forEach((row) => {
+        const network = row.Network;
+        const profileId = row.profile_id;
+
+        // Find the profile name
+        const profile = profiles.find(
+          (p) => p.customer_profile_id === profileId
+        );
+        const profileName = profile ? profile.name : `Profile ${profileId}`;
+
+        // Create a sheet key in the format "NetworkName-ProfileName"
+        const sheetKey = `${network}-${profileName}`;
+
+        // Initialize the array for this network-profile if it doesn't exist
+        if (!dataByNetworkAndProfile[sheetKey]) {
+          dataByNetworkAndProfile[sheetKey] = [];
+        }
+
+        // Add the data row to the appropriate network-profile group
+        dataByNetworkAndProfile[sheetKey].push(row);
       });
 
-      // Add the totals row to the formatted data
-      formattedData.push(totalsRow);
-
-      // Create a new worksheet with the data including totals
-      const wsWithTotals = XLSX.utils.json_to_sheet(formattedData);
-
-      // Add some styling to the totals row (bold)
-      const lastRowIndex = formattedData.length;
-      const range = XLSX.utils.decode_range(wsWithTotals["!ref"]);
-
-      // Add the worksheet to the workbook
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsWithTotals, "Analytics");
-
-      // Generate file name with network type and date range
-      XLSX.writeFile(
-        wb,
-        `analytics_${selectedNetwork}_${dateRange.start}_${dateRange.end}.xlsx`
-      );
-
-      setLoading(false);
-    } catch (error) {
-      console.error("Error downloading analytics:", error);
-      alert(`Error: ${error.message || "Failed to download analytics"}`);
+      // Export the data to Excel with separate sheets for each network-profile
+      if (Object.keys(dataByNetworkAndProfile).length > 0) {
+        await exportToExcel(dataByNetworkAndProfile);
+      } else {
+        setError("No data available for the selected criteria");
+      }
+    } catch (err) {
+      console.error("Error generating report:", err);
+      setError("Failed to generate report: " + err.message);
+    } finally {
+      // Always reset loading state when finished, regardless of success or error
       setLoading(false);
     }
   };
 
-  // Add a new function to handle downloading all networks
-  const handleDownloadAllNetworks = async () => {
-    if (!dateRange.start || !dateRange.end) {
-      alert("Please select a date range");
-      return;
-    }
-
-    setLoading(true);
-
+  // Update the exportToExcel function to handle the new data structure with separate sheets
+  const exportToExcel = async (dataByNetworkAndProfile) => {
     try {
-      // Create a workbook for all networks and profiles
+      // Create a new workbook
       const wb = XLSX.utils.book_new();
 
-      // Process each profile
-      for (const profile of profiles) {
-        if (!profile || !profile.customer_profile_id || !profile.network_type) {
-          console.log("Skipping invalid profile:", profile);
-          continue;
-        }
+      // Process each network-profile combination
+      Object.entries(dataByNetworkAndProfile).forEach(([sheetKey, data]) => {
+        if (!data || data.length === 0) return;
 
-        const profileId = profile.customer_profile_id;
-        const networkType = profile.network_type;
-        const profileName = profile.name || `Profile ${profileId}`;
-
-        console.log(`Processing profile: ${profileName} (${networkType})`);
-
-        // Get metrics for this network
-        const networkMetrics = NETWORK_METRICS[networkType] || [];
-
-        if (networkMetrics.length === 0) {
-          console.log(`No metrics available for network: ${networkType}`);
-          continue;
-        }
-
-        // Get metric IDs for this network
-        const metricIds = networkMetrics.map((metric) => metric.id);
-
-        // Fetch data for this profile
-        const response = await getProfileAnalytics(
-          customerId,
-          [profileId], // Just this single profile
-          metricIds,
-          dateRange.start,
-          dateRange.end
-        );
-
-        console.log(`API Response for ${profileName}:`, response);
-
-        if (!response || !response.data || response.data.length === 0) {
-          console.log(`No data available for profile: ${profileName}`);
-          continue;
-        }
-
-        // Get the formatter for this network
-        const formatter = getNetworkFormatter(networkType);
-
-        // Format the data
-        const formattedData = formatter(response, metricIds);
-
-        if (formattedData.length === 0) {
-          console.log(
-            `No formatted data available for profile: ${profileName}`
-          );
-          continue;
-        }
-
-        // Calculate totals for numeric fields
-        const totalsRow = { Date: "TOTAL", "Profile ID": "" };
-
-        // Get all column headers
-        const headers = Object.keys(formattedData[0]);
-
-        // Calculate totals for each numeric column
-        headers.forEach((header) => {
-          if (header !== "Date" && header !== "Profile ID") {
-            // Check if this is a numeric column by examining the first non-null value
-            const firstNonNullValue = formattedData.find(
-              (row) => row[header] !== null
-            )?.[header];
-
-            if (typeof firstNonNullValue === "number") {
-              // Sum up all numeric values in this column
-              totalsRow[header] = formattedData.reduce((sum, row) => {
-                return sum + (row[header] !== null ? row[header] : 0);
-              }, 0);
-            } else if (
-              typeof firstNonNullValue === "string" &&
-              (firstNonNullValue.startsWith("{") ||
-                firstNonNullValue.startsWith("["))
-            ) {
-              // For JSON strings (objects/arrays), don't calculate totals
-              totalsRow[header] = "N/A";
-            } else {
-              totalsRow[header] = "";
+        // Apply reporting period aggregation to the data
+        const aggregatedData = aggregateDataByPeriod(data, reportingPeriod);
+        
+        // Calculate totals for numeric columns
+        const totalsRow = { Date: "TOTAL" };
+        
+        // Find all numeric columns
+        const numericColumns = new Set();
+        aggregatedData.forEach(row => {
+          Object.entries(row).forEach(([key, value]) => {
+            if (key !== 'Date' && key !== 'Network' && key !== 'profile_id' && 
+                typeof value === 'number' && !isNaN(value)) {
+              numericColumns.add(key);
             }
-          }
+          });
+        });
+        
+        // Calculate sums for each numeric column
+        numericColumns.forEach(column => {
+          totalsRow[column] = aggregatedData.reduce((sum, row) => {
+            return sum + (typeof row[column] === 'number' ? row[column] : 0);
+          }, 0);
         });
 
-        // Add the totals row to the formatted data
-        formattedData.push(totalsRow);
+        // Remove any existing total row
+        const filteredData = aggregatedData.filter((row) => row.Date !== "TOTAL");
 
-        // Create a worksheet for this profile
-        const ws = XLSX.utils.json_to_sheet(formattedData);
+        // Create a copy of the data without profile_id for display in Excel
+        const displayData = filteredData.map((row) => {
+          const { profile_id, ...rest } = row;
+          return rest;
+        });
 
-        // Create a sheet name that's valid for Excel (max 31 chars, no special chars)
-        let sheetName = `${profileName} (${networkType})`;
-        sheetName = sheetName.replace(/[\\\/\*\?\[\]]/g, "_"); // Replace invalid chars
-        sheetName = sheetName.substring(0, 31); // Truncate to 31 chars
+        // Add the totals row to the end
+        displayData.push(totalsRow);
 
-        // Make sure sheet name is unique
-        let uniqueSheetName = sheetName;
-        let counter = 1;
-        while (wb.SheetNames.includes(uniqueSheetName)) {
-          uniqueSheetName = sheetName.substring(0, 27) + `_${counter}`;
-          counter++;
+        // Create a worksheet for this network-profile combination
+        const ws = XLSX.utils.json_to_sheet(displayData);
+
+        // Add the worksheet to the workbook with a sheet name based on network and profile
+        // Ensure sheet name is valid (max 31 chars, no special chars)
+        let sheetName = sheetKey;
+        if (sheetName.length > 31) {
+          sheetName = sheetName.substring(0, 31);
         }
+        // Replace invalid characters with underscore
+        sheetName = sheetName.replace(/[*?:\/\\[\]]/g, "_");
 
-        // Add the worksheet to the workbook
-        XLSX.utils.book_append_sheet(wb, ws, uniqueSheetName);
-      }
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      });
 
-      // Check if any sheets were added
-      if (wb.SheetNames.length === 0) {
-        throw new Error("No data available for any profile");
-      }
+      // Generate a filename with the date range and reporting period
+      const startStr = safeFormat(startDate, "yyyy-MM-dd");
+      const endStr = safeFormat(endDate, "yyyy-MM-dd");
+      const filename = `social_media_analytics_${startStr}_to_${endStr}_${reportingPeriod}.xlsx`;
 
-      // Generate file name with date range
-      XLSX.writeFile(
-        wb,
-        `analytics_all_profiles_${dateRange.start}_${dateRange.end}.xlsx`
-      );
-
-      setLoading(false);
-    } catch (error) {
-      console.error("Error downloading analytics:", error);
-      alert(`Error: ${error.message || "Failed to download analytics"}`);
-      setLoading(false);
+      // Write the workbook and trigger download
+      XLSX.writeFile(wb, filename);
+    } catch (err) {
+      console.error("Error exporting to Excel:", err);
+      setError("Failed to export data to Excel: " + err.message);
     }
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 mt-8">
-      <h2 className="text-xl font-bold mb-4 text-gray-800">
-        Download Analytics
-      </h2>
+    <div>
+      <Button
+        variant="outline"
+        className="mb-4 bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
+        onClick={() => setShowConfigPanel(!showConfigPanel)}
+      >
+        Configure Report
+      </Button>
 
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Select Network
-          </label>
-          <select
-            value={selectedNetwork}
-            onChange={handleNetworkChange}
-            className="w-full p-2 border border-gray-300 rounded-md text-gray-800"
-          >
-            {availableNetworks.length === 0 ? (
-              <option value="">No networks available</option>
-            ) : (
-              availableNetworks.map((network) => (
-                <option key={network} value={network}>
-                  {network ? network.replace(/_/g, " ").toUpperCase() : ""}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Selected Profiles
-          </label>
-          <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2 bg-gray-50">
-            {getProfilesByNetwork().length > 0 ? (
-              getProfilesByNetwork().map((profile) => (
-                <div
-                  key={profile.customer_profile_id}
-                  className="flex items-center mb-1"
+      {showConfigPanel && (
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            {/* Date Range and Reporting Period at the top */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <Label htmlFor="reporting-period" className="block mb-2">
+                  Reporting Period
+                </Label>
+                <Select
+                  value={reportingPeriod}
+                  onValueChange={setReportingPeriod}
                 >
-                  <input
-                    type="checkbox"
-                    id={`profile-${profile.customer_profile_id}`}
-                    checked={selectedProfiles.includes(
-                      profile.customer_profile_id
-                    )}
-                    onChange={() =>
-                      handleProfileToggle(profile.customer_profile_id)
-                    }
-                    className="mr-2"
-                  />
-                  <label
-                    htmlFor={`profile-${profile.customer_profile_id}`}
-                    className="text-gray-800"
+                  <SelectTrigger
+                    id="reporting-period"
+                    className="w-full border border-gray-300 bg-white"
                   >
-                    {profile.name || `Profile ${profile.customer_profile_id}`}
-                  </label>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-sm">
-                No profiles available for this network
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="block text-sm font-medium text-gray-700">
-              Select Metrics
-            </label>
-            <div className="space-x-2">
-              <button
-                onClick={handleSelectAllMetrics}
-                className="text-xs text-blue-600 hover:text-blue-800"
-              >
-                Select All
-              </button>
-              <span className="text-gray-400">|</span>
-              <button
-                onClick={handleClearAllMetrics}
-                className="text-xs text-blue-600 hover:text-blue-800"
-              >
-                Clear All
-              </button>
+                    <SelectValue placeholder="Select period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REPORTING_PERIODS.map((period) => (
+                      <SelectItem key={period.id} value={period.id}>
+                        {period.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
-          <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-md p-2 bg-gray-50">
-            {getAvailableMetrics().length > 0 ? (
-              getAvailableMetrics().map((metric) => (
-                <div key={metric.id} className="flex items-center mb-1">
-                  <input
-                    type="checkbox"
-                    id={`metric-${metric.id}`}
-                    checked={selectedMetrics.includes(metric.id)}
-                    onChange={() => handleMetricToggle(metric.id)}
-                    className="mr-2"
-                  />
-                  <label
-                    htmlFor={`metric-${metric.id}`}
-                    className="text-gray-800"
-                  >
-                    {metric.label}
-                  </label>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <Label htmlFor="start-date" className="block mb-2">
+                  Start Date
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal bg-white border border-gray-300"
+                      id="start-date"
+                    >
+                      {startDate ? (
+                        format(startDate, "PPP")
+                      ) : (
+                        <span className="text-gray-500">Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={startDate}
+                      onSelect={setStartDate}
+                      initialFocus
+                      className="bg-white"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div>
+                <Label htmlFor="end-date" className="block mb-2">
+                  End Date
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal bg-white border border-gray-300"
+                      id="end-date"
+                    >
+                      {endDate ? (
+                        format(endDate, "PPP")
+                      ) : (
+                        <span className="text-gray-500">Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      initialFocus
+                      className="bg-white"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* Networks Section */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Networks</h3>
+                <Button
+                  variant="outline"
+                  className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
+                  onClick={() => setShowNetworkSelector(true)}
+                >
+                  Add Network
+                </Button>
+              </div>
+
+              {showNetworkSelector && (
+                <div className="mb-4 p-4 border rounded-md bg-gray-50">
+                  <h4 className="font-medium mb-2">Select a Network</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {Object.entries(NETWORK_DISPLAY_NAMES)
+                      .filter(([key, _]) => {
+                        // Only show networks that have profiles and aren't already selected
+                        const networkHasProfiles = profiles.some(
+                          (profile) => profile.network_type === key
+                        );
+                        return (
+                          networkHasProfiles && !selectedNetworks.includes(key)
+                        );
+                      })
+                      .map(([key, value]) => (
+                        <Button
+                          key={key}
+                          variant="outline"
+                          className="justify-start bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
+                          onClick={() => handleAddNetwork(key)}
+                        >
+                          {value}
+                        </Button>
+                      ))}
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      className="text-gray-500"
+                      onClick={() => setShowNetworkSelector(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-sm">
-                No metrics available for this network
-              </p>
-            )}
-          </div>
-        </div>
+              )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Start Date
-            </label>
-            <input
-              type="date"
-              className="w-full p-2 border border-gray-300 rounded-md text-gray-800"
-              value={dateRange.start}
-              onChange={(e) =>
-                setDateRange({ ...dateRange, start: e.target.value })
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              End Date
-            </label>
-            <input
-              type="date"
-              className="w-full p-2 border border-gray-300 rounded-md text-gray-800"
-              value={dateRange.end}
-              onChange={(e) =>
-                setDateRange({ ...dateRange, end: e.target.value })
-              }
-            />
-          </div>
-        </div>
+              {/* Selected Networks */}
+              <div className="space-y-4">
+                {selectedNetworks.map((networkType) => {
+                  const displayName =
+                    NETWORK_DISPLAY_NAMES[networkType] || networkType;
+                  const networkProfiles = profiles.filter(
+                    (profile) => profile.network_type === networkType
+                  );
 
-        <div className="mt-6 flex space-x-4">
-          <button
-            onClick={handleDownload}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400"
-          >
-            {loading ? "Processing..." : "Download Selected Network"}
-          </button>
+                  if (networkProfiles.length === 0) return null;
 
-          <button
-            onClick={handleDownloadAllNetworks}
-            disabled={loading}
-            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400"
-          >
-            {loading ? "Processing..." : "Download All Networks"}
-          </button>
-        </div>
+                  return (
+                    <div key={networkType} className="border rounded-md p-4">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-medium">{displayName}</h3>
+                        <Button
+                          variant="ghost"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => {
+                            setSelectedNetworks(
+                              selectedNetworks.filter((n) => n !== networkType)
+                            );
+                            setSelectedProfiles(
+                              selectedProfiles.filter(
+                                (id) =>
+                                  !networkProfiles.some(
+                                    (p) => p.customer_profile_id === id
+                                  )
+                              )
+                            );
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+
+                      {/* Profiles for this network */}
+                      <div className="mb-4">
+                        <Label className="block mb-2">Select Profiles</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {networkProfiles.map((profile) => (
+                            <div
+                              key={profile.customer_profile_id}
+                              className="flex items-center space-x-2"
+                            >
+                              <Checkbox
+                                id={`profile-${profile.customer_profile_id}`}
+                                checked={selectedProfiles.includes(
+                                  profile.customer_profile_id
+                                )}
+                                onCheckedChange={() =>
+                                  handleProfileSelection(
+                                    profile.customer_profile_id
+                                  )
+                                }
+                              />
+                              <Label
+                                htmlFor={`profile-${profile.customer_profile_id}`}
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                {profile.name ||
+                                  profile.native_name ||
+                                  "Unnamed Profile"}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Metrics for this network */}
+                      <div>
+                        <Label className="block mb-2">Select Metrics</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {(() => {
+                            let metricsKey = networkType;
+                            if (
+                              networkType === "facebook" ||
+                              networkType === "fb_page"
+                            ) {
+                              metricsKey = "facebook";
+                            }
+
+                            // Get metrics for this network type
+                            const metrics = NETWORK_METRICS[metricsKey] || [];
+
+                            // Get selected metrics for this network
+                            const networkMetrics =
+                              selectedMetricsByNetwork[networkType] || [];
+
+                            return metrics.map((metric) => (
+                              <div
+                                key={`${networkType}-${metric.id}`}
+                                className="flex items-center space-x-2"
+                              >
+                                <Checkbox
+                                  id={`metric-${networkType}-${metric.id}`}
+                                  checked={networkMetrics.includes(metric.id)}
+                                  onCheckedChange={() =>
+                                    handleMetricSelection(
+                                      networkType,
+                                      metric.id
+                                    )
+                                  }
+                                />
+                                <Label
+                                  htmlFor={`metric-${networkType}-${metric.id}`}
+                                  className="text-sm font-normal cursor-pointer"
+                                >
+                                  {metric.label}
+                                </Label>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {selectedNetworks.length === 0 && (
+                  <div className="p-4 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-center">
+                    Click "Add Network" to select networks for your report
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex justify-end space-x-2">
+        <Button
+          onClick={generateReport}
+          disabled={
+            loading ||
+            selectedProfiles.length === 0 ||
+            Object.keys(selectedMetricsByNetwork).length === 0
+          }
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Generate Report
+            </>
+          )}
+        </Button>
       </div>
+
+      {selectedProfiles.length === 0 ||
+      Object.keys(selectedMetricsByNetwork).length === 0 ? (
+        <div className="p-4 mt-4 border border-yellow-200 bg-yellow-50 rounded-md text-yellow-800">
+          Please select at least one network and metric
+        </div>
+      ) : null}
+
+      {error && (
+        <div className="p-4 mt-4 border border-red-200 bg-red-50 rounded-md text-red-800">
+          {error}
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default Analytics;
