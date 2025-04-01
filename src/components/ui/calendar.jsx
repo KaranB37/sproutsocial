@@ -11,10 +11,15 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  selected,
+  onSelect,
   ...props
 }) {
   return (
     <DayPicker
+      mode="single"
+      selected={selected}
+      onSelect={onSelect}
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{

@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/popover";
 import { format, isValid } from "date-fns";
 import { CalendarIcon, BarChart3, Loader2 } from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 // Define reporting period options
 const REPORTING_PERIODS = [
@@ -131,8 +133,8 @@ const NETWORK_METRICS = {
 const Analytics = ({ profiles, customerId }) => {
   // State for form inputs
   const [reportingPeriod, setReportingPeriod] = useState("daily");
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
   const [selectedNetworkType, setSelectedNetworkType] = useState("");
   const [selectedProfiles, setSelectedProfiles] = useState([]);
   const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({});
@@ -496,61 +498,25 @@ const Analytics = ({ profiles, customerId }) => {
                 <Label htmlFor="start-date" className="block mb-2">
                   Start Date
                 </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal bg-white border border-gray-300"
-                      id="start-date"
-                    >
-                      {startDate ? (
-                        format(startDate, "PPP")
-                      ) : (
-                        <span className="text-gray-500">Pick a date</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                      className="bg-white"
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  selected={startDate}
+                  onChange={(date) => setStartDate(date)}
+                  dateFormat="MMMM d, yyyy"
+                  className="border border-gray-300 p-2 rounded-md w-full"
+                  placeholderText="Select a start date"
+                />
               </div>
               <div>
                 <Label htmlFor="end-date" className="block mb-2">
                   End Date
                 </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal bg-white border border-gray-300"
-                      id="end-date"
-                    >
-                      {endDate ? (
-                        format(endDate, "PPP")
-                      ) : (
-                        <span className="text-gray-500">Pick a date</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white" align="end">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                      className="bg-white"
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  selected={endDate}
+                  onChange={(date) => setEndDate(date)}
+                  dateFormat="MMMM d, yyyy"
+                  className="border border-gray-300 p-2 rounded-md w-full"
+                  placeholderText="Select an end date"
+                />
               </div>
             </div>
 
