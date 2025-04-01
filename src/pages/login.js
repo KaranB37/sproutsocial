@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
-import { toast } from "react-hot-toast";
+import { toast, Toaster } from "react-hot-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -21,10 +23,10 @@ export default function LoginPage() {
 
     try {
       // Call the authentication API through our proxy endpoint
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           username,
@@ -33,24 +35,30 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
+      console.log(response);
 
       if (response.ok) {
         // Store authentication token in localStorage
-        localStorage.setItem("auth_token", data.token || "authenticated");
-        localStorage.setItem("user", JSON.stringify(data.user || { username }));
-        
-        // Show success toast
+        login(data.user, data.token);
         toast.success("Login successful!");
-        
-        // Redirect to root path with a small delay to ensure toast is visible
-        setTimeout(() => {
-          router.push("/");
-        }, 1500);
+
+        // Redirect based on environment
+        const redirectUrl =
+          process.env.NODE_ENV === "production"
+            ? "https://sproutsocial.vercel.app/"
+            : "http://localhost:3000/";
+
+        // Redirect to the appropriate URL
+        router.push(redirectUrl);
       } else {
-        setError(data.error || "Authentication failed. Please check your credentials.");
+        toast.error("Authentication failed. Please check your credentials.");
+        setError(
+          data.error || "Authentication failed. Please check your credentials."
+        );
         console.log("Login error:", data.details);
       }
     } catch (error) {
+      toast.error("Authentication failed. Please check your credentials.");
       setError("Authentication failed. Please check your credentials.");
       console.log("Login error:", error);
     } finally {
@@ -60,6 +68,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <Toaster />
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
