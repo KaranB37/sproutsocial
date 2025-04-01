@@ -19,6 +19,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated()) {
+      console.log("User is already authenticated, redirecting to home...");
       router.push("/"); // Redirect to home if already logged in
     }
   }, [isAuthenticated, router]);
@@ -29,7 +30,6 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Call the authentication API through our proxy endpoint
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
@@ -42,7 +42,7 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-      console.log(response);
+      console.log("Login response:", response);
 
       if (response.ok) {
         // Store authentication token in localStorage
@@ -50,13 +50,13 @@ export default function LoginPage() {
         toast.success("Login successful!");
 
         // Redirect based on environment
-        const redirectUrl =
-          process.env.NODE_ENV === "production"
-            ? "https://sproutsocial.vercel.app/"
-            : "http://localhost:3000/";
+        // const redirectUrl =
+        //   process.env.NODE_ENV === "production"
+        //     ? "https://sproutsocial.vercel.app/"
+        //     : "http://localhost:3000/";
 
-        // Redirect to the appropriate URL
-        router.push(redirectUrl);
+        // console.log("Redirecting to:", redirectUrl);
+        router.push("https://sproutsocial.vercel.app/");
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
@@ -96,7 +96,6 @@ export default function LoginPage() {
                   id="username"
                   type="text"
                   value={username}
-                  style={{ color: "white" }}
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   placeholder="Enter your username"
@@ -108,7 +107,6 @@ export default function LoginPage() {
                   id="password"
                   type="password"
                   value={password}
-                  style={{ color: "white" }}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="Enter your password"
