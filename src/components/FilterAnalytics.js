@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getAnalyticsWithFilters } from "@/api/analytics";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -14,7 +14,7 @@ export default function FilterAnalytics() {
   const [endDate, setEndDate] = useState("2023-03-31");
   const [metrics, setMetrics] = useState(["impressions", "reactions"]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!profileId || !startDate || !endDate || metrics.length === 0) {
       return;
     }
@@ -43,7 +43,7 @@ export default function FilterAnalytics() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profileId, startDate, endDate, metrics]);
 
   useEffect(() => {
     fetchData();
