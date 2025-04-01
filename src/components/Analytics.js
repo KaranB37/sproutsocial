@@ -725,7 +725,8 @@ const Analytics = ({ profiles, customerId }) => {
 
                 {selectedNetworks.length === 0 && (
                   <div className="p-4 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-center">
-                    Click "Add Network" to select networks for your report
+                    Click &quot; Add Network &quot; to select networks for your
+                    report
                   </div>
                 )}
               </div>
