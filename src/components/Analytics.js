@@ -212,10 +212,15 @@ const Analytics = ({ profiles, customerId }) => {
     if (reportingPeriod === "daily" || !data || data.length === 0) {
       return data;
     }
-    
+
     // Use the utility function to group data by reporting period
     // Pass start and end dates to ensure all periods in the range are included
-    return groupDataByReportingPeriod(data, reportingPeriod, startDate, endDate);
+    return groupDataByReportingPeriod(
+      data,
+      reportingPeriod,
+      startDate,
+      endDate
+    );
   };
 
   /**
@@ -377,30 +382,37 @@ const Analytics = ({ profiles, customerId }) => {
 
         // Apply reporting period aggregation to the data
         const aggregatedData = aggregateDataByPeriod(data, reportingPeriod);
-        
+
         // Calculate totals for numeric columns
         const totalsRow = { Date: "TOTAL" };
-        
+
         // Find all numeric columns
         const numericColumns = new Set();
-        aggregatedData.forEach(row => {
+        aggregatedData.forEach((row) => {
           Object.entries(row).forEach(([key, value]) => {
-            if (key !== 'Date' && key !== 'Network' && key !== 'profile_id' && 
-                typeof value === 'number' && !isNaN(value)) {
+            if (
+              key !== "Date" &&
+              key !== "Network" &&
+              key !== "profile_id" &&
+              typeof value === "number" &&
+              !isNaN(value)
+            ) {
               numericColumns.add(key);
             }
           });
         });
-        
+
         // Calculate sums for each numeric column
-        numericColumns.forEach(column => {
+        numericColumns.forEach((column) => {
           totalsRow[column] = aggregatedData.reduce((sum, row) => {
-            return sum + (typeof row[column] === 'number' ? row[column] : 0);
+            return sum + (typeof row[column] === "number" ? row[column] : 0);
           }, 0);
         });
 
         // Remove any existing total row
-        const filteredData = aggregatedData.filter((row) => row.Date !== "TOTAL");
+        const filteredData = aggregatedData.filter(
+          (row) => row.Date !== "TOTAL"
+        );
 
         // Create a copy of the data without profile_id for display in Excel
         const displayData = filteredData.map((row) => {
