@@ -178,6 +178,7 @@ const NETWORK_METRICS = {
     { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
     { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
+
   youtube: [
     { id: "lifetime_snapshot.followers_count", label: "Subscribers" },
     { id: "net_follower_growth", label: "Net Subscriber Growth" },
@@ -187,6 +188,7 @@ const NETWORK_METRICS = {
     { id: "likes", label: "Likes" },
     { id: "posts_sent_count", label: "Videos Published" },
   ],
+
   twitter: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
     { id: "net_follower_growth", label: "Net Follower Growth" },

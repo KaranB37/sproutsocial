@@ -19,9 +19,10 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated()) {
-      console.log("User is already authenticated, redirecting to home...");
-      router.push("/"); // Redirect to home if already logged in
-      // cba
+      console.log(
+        "User is already authenticated, redirecting to group selection..."
+      );
+      router.push("/groupSelection"); // Redirect to group selection page if already logged in
     }
   }, [isAuthenticated, router]);
 
@@ -50,15 +51,8 @@ export default function LoginPage() {
         login(data.user, data.token);
         toast.success("Login successful!");
 
-        // Redirect based on environment
-        // const redirectUrl =
-        //   process.env.NODE_ENV === "production"
-        //     ? "https://sproutsocial.vercel.app/"
-        //     : "http://localhost:3000/";
-
-        // console.log("Redirecting to:", redirectUrl);
-        router.push("https://sproutsocial.vercel.app/");
-        // router.push("http://localhost:3000/");
+        // Redirect to group selection page
+        router.push("/groupSelection");
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(

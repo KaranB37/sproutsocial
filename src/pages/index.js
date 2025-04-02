@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import { getCustomerId, getProfiles } from "@/api/profiles";
 import Dashboard from "@/components/Dashboard";
+import { Loader } from "@/components/ui/loader";
 
 export default function Home() {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [customerId, setCustomerId] = useState(null);
+  const router = useRouter();
+  const { groupId } = router.query;
 
   useEffect(() => {
     const loadData = async () => {
@@ -14,7 +18,15 @@ export default function Home() {
         const newCustomerId = await getCustomerId();
         setCustomerId(newCustomerId);
         const profilesData = await getProfiles(newCustomerId);
-        setProfiles(profilesData);
+
+        // Filter profiles by group ID if provided
+        const filteredProfiles = groupId
+          ? profilesData.filter((profile) =>
+              profile.groups.includes(parseInt(groupId))
+            )
+          : profilesData;
+
+        setProfiles(filteredProfiles);
         setLoading(false);
       } catch (err) {
         setError(err.message);
@@ -23,12 +35,12 @@ export default function Home() {
     };
 
     loadData();
-  }, []);
+  }, [groupId]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      <div className="flex justify-center items-center h-screen bg-white">
+        <Loader />
       </div>
     );
   }
@@ -48,5 +60,9 @@ export default function Home() {
     );
   }
 
-  return <Dashboard profiles={profiles} customerId={customerId} />;
+  return (
+    <div className="bg-white">
+      <Dashboard profiles={profiles} customerId={customerId} />
+    </div>
+  );
 }
