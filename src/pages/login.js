@@ -57,8 +57,8 @@ export default function LoginPage() {
         //     : "http://localhost:3000/";
 
         // console.log("Redirecting to:", redirectUrl);
-        // router.push("https://sproutsocial.vercel.app/");
-        router.push("http://localhost:3000/");
+        router.push("https://sproutsocial.vercel.app/");
+        // router.push("http://localhost:3000/");
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
