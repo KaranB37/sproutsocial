@@ -158,6 +158,38 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
 };
 
 /**
+ * Format Twitter analytics data for Excel export
+ * @param {Object} response - Raw API response
+ * @param {Array} selectedMetrics - List of metrics to include
+ * @returns {Array} Formatted data ready for Excel export
+ */
+export const formatTwitterAnalytics = (response, selectedMetrics) => {
+  if (!response || !response.data || !Array.isArray(response.data)) {
+    return [];
+  }
+
+  return response.data.map((item) => {
+    const { dimensions, metrics } = item;
+    const formattedRow = {
+      // Always include these dimension fields
+      Date: dimensions["reporting_period.by(day)"],
+      Network: "Twitter",
+    };
+
+    // Add selected metrics for Twitter
+    selectedMetrics.forEach((metricId) => {
+      if (metrics[metricId] !== undefined) {
+        formattedRow[metricId] = metrics[metricId];
+      } else {
+        formattedRow[metricId] = null; // Handle missing metrics
+      }
+    });
+
+    return formattedRow;
+  });
+};
+
+/**
  * Get the appropriate formatter based on network type
  * @param {string} networkType - The type of network (instagram, linkedin, facebook, etc.)
  * @returns {Function} The formatter function for the specified network

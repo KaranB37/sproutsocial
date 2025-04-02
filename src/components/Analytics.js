@@ -39,6 +39,7 @@ const NETWORK_DISPLAY_NAMES = {
   fb_instagram_account: "Instagram",
   linkedin_company: "LinkedIn",
   fb_page: "Facebook",
+  facebook: "Facebook",
   threads: "Threads",
   tiktok: "TikTok",
   youtube: "YouTube",
@@ -51,46 +52,139 @@ const NETWORK_METRICS = {
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
     { id: "net_follower_growth", label: "Net Follower Growth" },
     { id: "followers_gained", label: "Followers Gained" },
-    { id: "followers_lost", label: "Followers Lost" },
+    { id: "followers_gained_organic", label: "Organic Followers Gained" },
+    { id: "followers_gained_paid", label: "Paid Followers Gained" },
+    { id: "followers_lost", label: "Page Unlikes" },
+    { id: "lifetime_snapshot.fans_count", label: "Fans" },
+    { id: "fans_gained", label: "Page Likes" },
+    { id: "fans_gained_organic", label: "Organic Page Likes" },
+    { id: "fans_gained_paid", label: "Paid Page Likes" },
+    { id: "fans_lost", label: "Page Unlikes" },
     { id: "impressions", label: "Impressions" },
-    { id: "reach", label: "Reach" },
-    { id: "engagement", label: "Engagement" },
+    { id: "impressions_organic", label: "Organic Impressions" },
+    { id: "impressions_viral", label: "Viral Impressions" },
+    { id: "impressions_nonviral", label: "Non-viral Impressions" },
+    { id: "impressions_paid", label: "Paid Impressions" },
+    { id: "tab_views", label: "Page Tab Views" },
+    { id: "tab_views_login", label: "Logged In Page Tab Views" },
+    { id: "tab_views_logout", label: "Logged Out Page Tab Views" },
+    { id: "post_impressions", label: "Post Impressions" },
+    { id: "post_impressions_organic", label: "Organic Post Impressions" },
+    { id: "post_impressions_viral", label: "Viral Post Impressions" },
+    { id: "post_impressions_nonviral", label: "Non-viral Post Impressions" },
+    { id: "post_impressions_paid", label: "Paid Post Impressions" },
+    { id: "impressions_unique", label: "Reach" },
+    { id: "impressions_organic_unique", label: "Organic Reach" },
+    { id: "impressions_viral_unique", label: "Viral Reach" },
+    { id: "impressions_nonviral_unique", label: "Non-viral Reach" },
+    { id: "impressions_paid_unique", label: "Paid Reach" },
+    { id: "reactions", label: "Reactions" },
+    { id: "comments_count", label: "Comments" },
+    { id: "shares_count", label: "Shares" },
+    { id: "post_link_clicks", label: "Post Link Clicks" },
+    { id: "post_content_clicks_other", label: "Other Post Clicks" },
+    { id: "profile_actions", label: "Page Actions" },
+    { id: "post_engagements", label: "Post Engagements" },
+    { id: "video_views", label: "Video Views" },
+    { id: "video_views_organic", label: "Organic Video Views" },
+    { id: "video_views_paid", label: "Paid Video Views" },
+    { id: "video_views_autoplay", label: "Autoplay Video Views" },
+    { id: "video_views_click_to_play", label: "Click to Play Video Views" },
+    { id: "video_views_repeat", label: "Replayed Video Views" },
+    { id: "video_view_time", label: "Video View Time" },
+    { id: "video_views_unique", label: "Unique Video Views" },
+    { id: "video_views_30s_complete", label: "Full Video Views" },
+    {
+      id: "video_views_30s_complete_organic",
+      label: "Organic Full Video Views",
+    },
+    { id: "video_views_30s_complete_paid", label: "Paid Full Video Views" },
+    {
+      id: "video_views_30s_complete_autoplay",
+      label: "Autoplay Full Video Views",
+    },
+    {
+      id: "video_views_30s_complete_click_to_play",
+      label: "Click to Play Full Video Views",
+    },
+    {
+      id: "video_views_30s_complete_repeat",
+      label: "Replayed Full Video Views",
+    },
+    { id: "video_views_30s_complete_unique", label: "Unique Full Video Views" },
+    { id: "video_views_partial", label: "Partial Video Views" },
+    { id: "video_views_partial_organic", label: "Organic Partial Video Views" },
+    { id: "video_views_partial_paid", label: "Paid Partial Video Views" },
+    {
+      id: "video_views_partial_autoplay",
+      label: "Autoplay Partial Video Views",
+    },
+    {
+      id: "video_views_partial_click_to_play",
+      label: "Click to Play Partial Video Views",
+    },
+    { id: "video_views_partial_repeat", label: "Replayed Partial Video Views" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
+    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
   fb_instagram_account: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    {
+      id: "lifetime_snapshot.followers_by_age_gender",
+      label: "Followers By Age & Gender",
+    },
+    { id: "lifetime_snapshot.followers_by_city", label: "Followers By City" },
+    {
+      id: "lifetime_snapshot.followers_by_country",
+      label: "Followers By Country",
+    },
     { id: "net_follower_growth", label: "Net Follower Growth" },
     { id: "followers_gained", label: "Followers Gained" },
     { id: "followers_lost", label: "Followers Lost" },
+    { id: "lifetime_snapshot.following_count", label: "Following" },
+    { id: "net_following_growth", label: "Net Following Growth" },
     { id: "impressions", label: "Impressions" },
-    { id: "reach", label: "Reach" },
-    { id: "profile_views", label: "Profile Views" },
-    { id: "website_clicks", label: "Website Clicks" },
+    { id: "impressions_unique", label: "Reach" },
+    { id: "video_views", label: "Post Video Views" },
+    { id: "reactions", label: "Reactions" },
+    { id: "likes", label: "Likes" },
+    { id: "comments_count", label: "Comments" },
+    { id: "saves", label: "Saves" },
+    { id: "shares_count", label: "Shares" },
+    { id: "story_replies", label: "Story Replies" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
+    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
   linkedin_company: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
+    { id: "followers_by_job_function", label: "Followers By Job" },
+    { id: "followers_by_seniority", label: "Followers By Seniority" },
     { id: "net_follower_growth", label: "Net Follower Growth" },
     { id: "followers_gained", label: "Followers Gained" },
+    { id: "followers_gained_organic", label: "Organic Followers Gained" },
+    { id: "followers_gained_paid", label: "Paid Followers Gained" },
     { id: "followers_lost", label: "Followers Lost" },
     { id: "impressions", label: "Impressions" },
+    { id: "impressions_unique", label: "Reach" },
     { id: "engagement", label: "Engagement" },
     { id: "clicks", label: "Clicks" },
     { id: "reactions", label: "Reactions" },
-    { id: "comments", label: "Comments" },
-    { id: "shares", label: "Shares" },
+    { id: "comments_count", label: "Comments" },
+    { id: "shares_count", label: "Shares" },
+    { id: "post_content_clicks", label: "Post Clicks (All)" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
+    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
   youtube: [
     { id: "lifetime_snapshot.followers_count", label: "Subscribers" },
     { id: "net_follower_growth", label: "Net Subscriber Growth" },
     { id: "followers_gained", label: "Subscribers Gained" },
     { id: "followers_lost", label: "Subscribers Lost" },
-    { id: "views", label: "Views" },
-    { id: "watch_time", label: "Watch Time (hours)" },
+    { id: "posts_sent_count", label: "Posts Sent" },
     { id: "likes", label: "Likes" },
-    { id: "comments", label: "Comments" },
-    { id: "shares", label: "Shares" },
     { id: "posts_sent_count", label: "Videos Published" },
   ],
   twitter: [
@@ -99,12 +193,26 @@ const NETWORK_METRICS = {
     { id: "followers_gained", label: "Followers Gained" },
     { id: "followers_lost", label: "Followers Lost" },
     { id: "impressions", label: "Impressions" },
-    { id: "engagement", label: "Engagement" },
-    { id: "url_clicks", label: "URL Clicks" },
-    { id: "retweets", label: "Retweets" },
-    { id: "replies", label: "Replies" },
+    { id: "post_media_views", label: "Media Views" },
+    { id: "video_views", label: "Video Views" },
+    { id: "reactions", label: "Reactions" },
     { id: "likes", label: "Likes" },
+    { id: "comments_count", label: "Replies" },
+    { id: "shares_count", label: "Reposts" },
+    { id: "post_content_clicks", label: "Post Clicks (All)" },
+    { id: "post_link_clicks", label: "Post Link Clicks" },
+    { id: "post_content_clicks_other", label: "Other Post Clicks" },
+    { id: "post_media_clicks", label: "Post Media Clicks" },
+    { id: "post_hashtag_clicks", label: "Post Hashtag Clicks" },
+    { id: "post_detail_expand_clicks", label: "Post Detail Expand Clicks" },
+    { id: "post_profile_clicks", label: "Profile Clicks" },
+    { id: "engagements_other", label: "Other Engagements" },
+    { id: "post_app_engagements", label: "App Engagements" },
+    { id: "post_app_installs", label: "App Install Attempts" },
+    { id: "post_app_opens", label: "App Opens" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
+    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
   tiktok: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
@@ -118,16 +226,7 @@ const NETWORK_METRICS = {
     { id: "shares", label: "Shares" },
     { id: "posts_sent_count", label: "Videos Published" },
   ],
-  threads: [
-    { id: "lifetime_snapshot.followers_count", label: "Followers" },
-    { id: "net_follower_growth", label: "Net Follower Growth" },
-    { id: "followers_gained", label: "Followers Gained" },
-    { id: "followers_lost", label: "Followers Lost" },
-    { id: "impressions", label: "Impressions" },
-    { id: "likes", label: "Likes" },
-    { id: "reposts", label: "Reposts" },
-    { id: "posts_sent_count", label: "Posts Sent Count" },
-  ],
+  threads: [{ id: "lifetime_snapshot.followers_count", label: "Followers" }],
 };
 
 const Analytics = ({ profiles, customerId }) => {
@@ -234,7 +333,6 @@ const Analytics = ({ profiles, customerId }) => {
 
     try {
       // Fix timezone issues by using date strings in local time
-      // This ensures selected dates aren't shifted due to timezone conversion
       const formattedStartDate = new Date(startDate);
       const startYear = formattedStartDate.getFullYear();
       const startMonth = String(formattedStartDate.getMonth() + 1).padStart(
@@ -256,6 +354,7 @@ const Analytics = ({ profiles, customerId }) => {
 
       // Collect all selected profiles and their corresponding metrics by network
       const reportData = [];
+      const numericColumns = new Set();
 
       // Process each network separately
       for (const networkType of selectedNetworks) {
@@ -266,7 +365,6 @@ const Analytics = ({ profiles, customerId }) => {
           return (
             profile &&
             (profile.network_type === networkType ||
-              // Handle Facebook's different network types
               (networkType === "facebook" &&
                 (profile.network_type === "fb_page" ||
                   profile.network_type === "facebook")))
@@ -284,13 +382,12 @@ const Analytics = ({ profiles, customerId }) => {
 
         try {
           // Fetch data for this network
-          // Always request daily data from the API, we'll aggregate it later based on reportingPeriod
           const response = await getProfileAnalytics({
             customerId,
             profileId: networkProfiles,
             startDate: startDateStr,
             endDate: endDateStr,
-            reportingPeriod: "daily", // Always request daily data from API
+            reportingPeriod: "daily",
             metrics: networkMetrics,
           });
 
@@ -319,6 +416,19 @@ const Analytics = ({ profiles, customerId }) => {
             formattedData,
             reportingPeriod
           );
+
+          // Populate numericColumns
+          aggregatedData.forEach((row) => {
+            Object.keys(row).forEach((key) => {
+              if (typeof row[key] === "number" && !isNaN(row[key])) {
+                numericColumns.add(key);
+              }
+            });
+          });
+
+          // After calculating totals
+          console.log("Aggregated Data:", aggregatedData);
+          console.log("Numeric Columns:", Array.from(numericColumns));
 
           // Add to the combined report data
           reportData.push(...aggregatedData);
@@ -367,7 +477,6 @@ const Analytics = ({ profiles, customerId }) => {
       console.error("Error generating report:", err);
       setError("Failed to generate report: " + err.message);
     } finally {
-      // Always reset loading state when finished, regardless of success or error
       setLoading(false);
     }
   };
@@ -375,20 +484,14 @@ const Analytics = ({ profiles, customerId }) => {
   // Update the exportToExcel function to handle the new data structure with separate sheets
   const exportToExcel = async (dataByNetworkAndProfile) => {
     try {
-      // Create a new workbook
       const wb = XLSX.utils.book_new();
 
-      // Process each network-profile combination
       Object.entries(dataByNetworkAndProfile).forEach(([sheetKey, data]) => {
         if (!data || data.length === 0) return;
 
-        // Apply reporting period aggregation to the data
         const aggregatedData = aggregateDataByPeriod(data, reportingPeriod);
-
-        // Calculate totals for numeric columns
         const totalsRow = { Date: "TOTAL" };
 
-        // Find all numeric columns
         const numericColumns = new Set();
         aggregatedData.forEach((row) => {
           Object.entries(row).forEach(([key, value]) => {
@@ -404,48 +507,41 @@ const Analytics = ({ profiles, customerId }) => {
           });
         });
 
-        // Calculate sums for each numeric column
         numericColumns.forEach((column) => {
           totalsRow[column] = aggregatedData.reduce((sum, row) => {
             return sum + (typeof row[column] === "number" ? row[column] : 0);
           }, 0);
         });
 
-        // Remove any existing total row
+        console.log("Aggregated Data:", aggregatedData);
+        console.log("Numeric Columns:", Array.from(numericColumns));
+        console.log("Totals Row After Calculation:", totalsRow);
+
         const filteredData = aggregatedData.filter(
           (row) => row.Date !== "TOTAL"
         );
 
-        // Create a copy of the data without profile_id for display in Excel
         const displayData = filteredData.map((row) => {
           const { profile_id, ...rest } = row;
           return rest;
         });
 
-        // Add the totals row to the end
         displayData.push(totalsRow);
 
-        // Create a worksheet for this network-profile combination
         const ws = XLSX.utils.json_to_sheet(displayData);
-
-        // Add the worksheet to the workbook with a sheet name based on network and profile
-        // Ensure sheet name is valid (max 31 chars, no special chars)
         let sheetName = sheetKey;
         if (sheetName.length > 31) {
           sheetName = sheetName.substring(0, 31);
         }
-        // Replace invalid characters with underscore
         sheetName = sheetName.replace(/[*?:\/\\[\]]/g, "_");
 
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
       });
 
-      // Generate a filename with the date range and reporting period
       const startStr = safeFormat(startDate, "yyyy-MM-dd");
       const endStr = safeFormat(endDate, "yyyy-MM-dd");
       const filename = `social_media_analytics_${startStr}_to_${endStr}_${reportingPeriod}.xlsx`;
 
-      // Write the workbook and trigger download
       XLSX.writeFile(wb, filename);
     } catch (err) {
       console.error("Error exporting to Excel:", err);
