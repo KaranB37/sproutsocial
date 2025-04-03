@@ -53,6 +53,7 @@ export default function LoginPage() {
 
         // Redirect to group selection page
         router.push("https://sproutsocial.vercel.app/groupSelection");
+        console.log("routed... haha");
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
