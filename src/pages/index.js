@@ -13,6 +13,12 @@ export default function Home() {
   const { groupId } = router.query;
 
   useEffect(() => {
+    // If there's no groupId, redirect to group selection page
+    if (router.isReady && !groupId) {
+      router.push("/groupSelection");
+      return;
+    }
+
     const loadData = async () => {
       try {
         const newCustomerId = await getCustomerId();
@@ -34,8 +40,10 @@ export default function Home() {
       }
     };
 
-    loadData();
-  }, [groupId]);
+    if (groupId) {
+      loadData();
+    }
+  }, [groupId, router]);
 
   if (loading) {
     return (
@@ -47,7 +55,7 @@ export default function Home() {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-white">
         <h2 className="text-red-600 text-xl font-bold mb-2">Error</h2>
         <p className="text-gray-800 bg-red-100 p-4 rounded-lg">{error}</p>
         <button
@@ -61,7 +69,7 @@ export default function Home() {
   }
 
   return (
-    <div className="bg-white">
+    <div className="min-h-screen bg-white">
       <Dashboard profiles={profiles} customerId={customerId} />
     </div>
   );

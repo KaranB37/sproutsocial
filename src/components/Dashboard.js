@@ -12,9 +12,17 @@ import { Separator } from "@/components/ui/separator";
 import SocialMediaProfiles from "@/components/SocialMediaProfiles";
 import Analytics from "@/components/Analytics";
 
-export default function Dashboard({ profiles, customerId }) {
+export default function Dashboard({ profiles, customerId, analyticsData }) {
+  // Only extract data if analyticsData exists
+  let lifetimeFollowersCount = null;
+  if (analyticsData && analyticsData.data && analyticsData.data.length > 0) {
+    const lastEntry = analyticsData.data[analyticsData.data.length - 1];
+    lifetimeFollowersCount =
+      lastEntry.metrics["lifetime_snapshot.followers_count"];
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-white">
       <div className="flex-1 space-y-4 p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight text-gray-800">
@@ -22,7 +30,7 @@ export default function Dashboard({ profiles, customerId }) {
           </h2>
         </div>
 
-        <Tabs defaultValue="profiles" className="space-y-4">
+        <Tabs defaultValue="profiles" className="bg-white">
           <TabsList className="bg-white border rounded-md">
             <TabsTrigger
               value="profiles"
@@ -70,6 +78,12 @@ export default function Dashboard({ profiles, customerId }) {
               </CardHeader>
               <CardContent>
                 <Analytics profiles={profiles} customerId={customerId} />
+                {lifetimeFollowersCount && (
+                  <div className="mt-4">
+                    <h2 className="text-lg font-bold">Lifetime Followers</h2>
+                    <p>{lifetimeFollowersCount}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
