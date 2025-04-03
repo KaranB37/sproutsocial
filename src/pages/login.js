@@ -22,7 +22,8 @@ export default function LoginPage() {
       console.log(
         "User is already authenticated, redirecting to group selection..."
       );
-      router.push("https://sproutsocial.vercel.app/groupSelection"); // Redirect to group selection page if already logged in
+      // Use router.replace for immediate redirection without adding to history
+      router.replace("/groupSelection");
     }
   }, [isAuthenticated, router]);
 
@@ -44,16 +45,25 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-      console.log("Login response:", response);
+      console.log("Login response:", data);
 
       if (response.ok) {
         // Store authentication token in localStorage
         login(data.user, data.token);
         toast.success("Login successful!");
 
-        // Redirect to group selection page
-        router.push("https://sproutsocial.vercel.app/groupSelection");
-        console.log("routed... haha");
+        // Use window.location.href as a fallback redirection method
+        setTimeout(() => {
+          // Use router.replace instead of push for more reliable navigation
+          router.replace("/groupSelection");
+
+          // If router navigation fails, use direct location change as backup
+          setTimeout(() => {
+            if (window.location.pathname !== "/groupSelection") {
+              window.location.href = "/groupSelection";
+            }
+          }, 500);
+        }, 100);
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
