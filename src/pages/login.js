@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,20 +12,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [redirecting, setRedirecting] = useState(false);
-  const router = useRouter();
   const { login, isAuthenticated } = useAuth();
 
-  // Redirect if already authenticated - using window.location for most reliable redirection
+  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated() && !redirecting) {
-      console.log(
-        "User is already authenticated, redirecting to group selection..."
-      );
-      setRedirecting(true);
-      window.location.href = "/groupSelection";
+    if (isAuthenticated()) {
+      // Use direct navigation to the absolute URL
+      window.location.replace("https://sproutsocial.vercel.app/groupSelection");
     }
-  }, [isAuthenticated, redirecting]);
+  }, [isAuthenticated]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -46,29 +40,25 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-      console.log("Login response:", data);
 
       if (response.ok) {
         // Store authentication token in localStorage
         login(data.user, data.token);
         toast.success("Login successful!");
 
-        setRedirecting(true);
-
-        // Force a hard redirect with window.location
-        // This is the most reliable method across different environments
-        window.location.href = "/groupSelection";
+        // Use the full absolute URL for direct navigation
+        window.location.replace(
+          "https://sproutsocial.vercel.app/groupSelection"
+        );
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
           data.error || "Authentication failed. Please check your credentials."
         );
-        console.log("Login error:", data.details);
       }
     } catch (error) {
       toast.error("Authentication failed. Please check your credentials.");
       setError("Authentication failed. Please check your credentials.");
-      console.log("Login error:", error);
     } finally {
       setLoading(false);
     }
@@ -89,46 +79,37 @@ export default function LoginPage() {
               {error}
             </Alert>
           )}
-          {redirecting ? (
-            <div className="text-center p-4">
-              <p>Redirecting to Group Selection...</p>
-              <div className="mt-2 flex justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+          <form onSubmit={handleLogin}>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  placeholder="Enter your username"
+                  className="text-white"
+                />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="text-white"
+                  placeholder="Enter your password"
+                />
+              </div>
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? "Signing in..." : "Sign In"}
+              </Button>
             </div>
-          ) : (
-            <form onSubmit={handleLogin}>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    placeholder="Enter your username"
-                    className="text-white"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="text-white"
-                    placeholder="Enter your password"
-                  />
-                </div>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? "Signing in..." : "Sign In"}
-                </Button>
-              </div>
-            </form>
-          )}
+          </form>
         </CardContent>
       </Card>
     </div>
