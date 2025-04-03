@@ -22,7 +22,7 @@ export default function LoginPage() {
       console.log(
         "User is already authenticated, redirecting to group selection..."
       );
-      router.push("/groupSelection"); // Redirect to group selection page if already logged in
+      router.push("https://sproutsocial.vercel.app/groupSelection"); // Redirect to group selection page if already logged in
     }
   }, [isAuthenticated, router]);
 
@@ -52,7 +52,7 @@ export default function LoginPage() {
         toast.success("Login successful!");
 
         // Redirect to group selection page
-        router.push("/groupSelection");
+        router.push("https://sproutsocial.vercel.app/groupSelection");
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
