@@ -5,16 +5,18 @@
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatInstagramAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data)) {
+  if (!response || !response.data || !Array.isArray(response.data.data)) {
+    console.error("Invalid response format for Instagram:", response);
     return [];
   }
 
-  return response.data.map((item) => {
+  return response.data.data.map((item) => {
     const { dimensions, metrics } = item;
     const formattedRow = {
       // Always include these dimension fields
       Date: dimensions["reporting_period.by(day)"],
       Network: "Instagram",
+      profile_id: dimensions["customer_profile_id"],
     };
 
     // Add selected metrics
@@ -32,6 +34,9 @@ export const formatInstagramAnalytics = (response, selectedMetrics) => {
           } else {
             formattedRow[metricId] = metrics[parent][child];
           }
+        } else if (metrics[metricId] !== undefined) {
+          // Try direct access as fallback
+          formattedRow[metricId] = metrics[metricId];
         } else {
           formattedRow[metricId] = null;
         }
@@ -52,6 +57,7 @@ export const formatInstagramAnalytics = (response, selectedMetrics) => {
       }
     });
 
+    console.log("Instagram formatted row:", formattedRow);
     return formattedRow;
   });
 };
@@ -63,15 +69,17 @@ export const formatInstagramAnalytics = (response, selectedMetrics) => {
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatLinkedInAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data)) {
+  if (!response || !response.data || !Array.isArray(response.data.data)) {
+    console.error("Invalid response format for LinkedIn:", response);
     return [];
   }
 
-  return response.data.map((item) => {
+  return response.data.data.map((item) => {
     const { dimensions, metrics } = item;
     const formattedRow = {
       Date: dimensions["reporting_period.by(day)"],
       Network: "LinkedIn",
+      profile_id: dimensions["customer_profile_id"],
     };
 
     selectedMetrics.forEach((metricId) => {
@@ -88,6 +96,9 @@ export const formatLinkedInAnalytics = (response, selectedMetrics) => {
           } else {
             formattedRow[metricId] = metrics[parent][child];
           }
+        } else if (metrics[metricId] !== undefined) {
+          // Try direct access as fallback
+          formattedRow[metricId] = metrics[metricId];
         } else {
           formattedRow[metricId] = null;
         }
@@ -110,6 +121,7 @@ export const formatLinkedInAnalytics = (response, selectedMetrics) => {
       }
     });
 
+    console.log("LinkedIn formatted row:", formattedRow);
     return formattedRow;
   });
 };
@@ -121,15 +133,17 @@ export const formatLinkedInAnalytics = (response, selectedMetrics) => {
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatFacebookAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data)) {
+  if (!response || !response.data || !Array.isArray(response.data.data)) {
+    console.error("Invalid response format for Facebook:", response);
     return [];
   }
 
-  return response.data.map((item) => {
+  return response.data.data.map((item) => {
     const { dimensions, metrics } = item;
     const formattedRow = {
       Date: dimensions["reporting_period.by(day)"],
       Network: "Facebook",
+      profile_id: dimensions["customer_profile_id"],
     };
 
     selectedMetrics.forEach((metricId) => {
@@ -144,6 +158,9 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
           } else {
             formattedRow[metricId] = metrics[parent][child];
           }
+        } else if (metrics[metricId] !== undefined) {
+          // Try direct access as fallback
+          formattedRow[metricId] = metrics[metricId];
         } else {
           formattedRow[metricId] = null;
         }
@@ -153,6 +170,7 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
       }
     });
 
+    console.log("Facebook formatted row:", formattedRow);
     return formattedRow;
   });
 };
@@ -164,27 +182,42 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatTwitterAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data)) {
+  if (!response || !response.data || !Array.isArray(response.data.data)) {
+    console.error("Invalid response format for Twitter:", response);
     return [];
   }
 
-  return response.data.map((item) => {
+  return response.data.data.map((item) => {
     const { dimensions, metrics } = item;
     const formattedRow = {
       // Always include these dimension fields
       Date: dimensions["reporting_period.by(day)"],
       Network: "Twitter",
+      profile_id: dimensions["customer_profile_id"],
     };
 
-    // Add selected metrics for Twitter
+    // Add selected metrics
     selectedMetrics.forEach((metricId) => {
-      if (metrics[metricId] !== undefined) {
+      if (metricId.includes(".")) {
+        // Handle nested metrics like lifetime_snapshot.followers_count
+        const [parent, child] = metricId.split(".");
+        if (metrics[parent] && metrics[parent][child] !== undefined) {
+          formattedRow[metricId] = metrics[parent][child];
+        } else if (metrics[metricId] !== undefined) {
+          // Try direct access as fallback
+          formattedRow[metricId] = metrics[metricId];
+        } else {
+          formattedRow[metricId] = null;
+        }
+      } else if (metrics[metricId] !== undefined) {
+        // Handle regular metrics
         formattedRow[metricId] = metrics[metricId];
       } else {
         formattedRow[metricId] = null; // Handle missing metrics
       }
     });
 
+    console.log("Twitter formatted row:", formattedRow);
     return formattedRow;
   });
 };

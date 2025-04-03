@@ -402,6 +402,8 @@ const Analytics = ({ profiles, customerId }) => {
             continue;
           }
 
+          console.log(`Raw API response for ${networkType}:`, response);
+
           // Format the data using the appropriate formatter
           const formatter = getNetworkFormatter(networkType);
           const formattedData = formatter(response, networkMetrics);
@@ -409,9 +411,9 @@ const Analytics = ({ profiles, customerId }) => {
           // Log the formatted data for debugging
           console.log(
             `Formatted data for ${networkType}:`,
-            formattedData.length,
-            "rows"
+            formattedData.length > 0 ? formattedData[0] : "No formatted data"
           );
+          console.log(`All formatted rows: ${formattedData.length}`);
 
           // Aggregate data by reporting period
           const aggregatedData = aggregateDataByPeriod(
@@ -483,7 +485,7 @@ const Analytics = ({ profiles, customerId }) => {
     }
   };
 
-  // Update the exportToExcel function to handle the new data structure with separate sheets
+  // Update the exportToExcel function with better debugging
   const exportToExcel = async (dataByNetworkAndProfile) => {
     try {
       const wb = XLSX.utils.book_new();
@@ -491,12 +493,26 @@ const Analytics = ({ profiles, customerId }) => {
       Object.entries(dataByNetworkAndProfile).forEach(([sheetKey, data]) => {
         if (!data || data.length === 0) return;
 
+        console.log(`Processing sheet: ${sheetKey}`);
+        console.log(`Data sample for ${sheetKey}:`, data[0]);
+
         const aggregatedData = aggregateDataByPeriod(data, reportingPeriod);
         const totalsRow = { Date: "TOTAL" };
 
         const numericColumns = new Set();
+        let followerMetricFound = false;
+
         aggregatedData.forEach((row) => {
           Object.entries(row).forEach(([key, value]) => {
+            if (
+              key === "lifetime_snapshot.followers_count" &&
+              value !== null &&
+              value !== undefined
+            ) {
+              followerMetricFound = true;
+              console.log(`Found follower count in data: ${value}`);
+            }
+
             if (
               key !== "Date" &&
               key !== "Network" &&
@@ -509,15 +525,39 @@ const Analytics = ({ profiles, customerId }) => {
           });
         });
 
+        console.log(
+          `Numeric columns for ${sheetKey}:`,
+          Array.from(numericColumns)
+        );
+        console.log(`Follower metric found: ${followerMetricFound}`);
+
         numericColumns.forEach((column) => {
           totalsRow[column] = aggregatedData.reduce((sum, row) => {
             return sum + (typeof row[column] === "number" ? row[column] : 0);
           }, 0);
         });
 
-        console.log("Aggregated Data:", aggregatedData);
-        console.log("Numeric Columns:", Array.from(numericColumns));
-        console.log("Totals Row After Calculation:", totalsRow);
+        // Add lifetime followers count from the last entry
+        const lastEntry =
+          aggregatedData.length > 0
+            ? aggregatedData[aggregatedData.length - 1]
+            : null;
+        if (
+          lastEntry &&
+          lastEntry["lifetime_snapshot.followers_count"] !== undefined
+        ) {
+          console.log(
+            `Using last entry's follower count: ${lastEntry["lifetime_snapshot.followers_count"]}`
+          );
+          totalsRow["lifetime_snapshot.followers_count"] =
+            lastEntry["lifetime_snapshot.followers_count"];
+        } else if (lastEntry) {
+          console.log("Last entry does not have follower count:", lastEntry);
+        } else {
+          console.log("No entries found for aggregated data");
+        }
+
+        console.log("Totals Row:", totalsRow);
 
         const filteredData = aggregatedData.filter(
           (row) => row.Date !== "TOTAL"
@@ -529,6 +569,11 @@ const Analytics = ({ profiles, customerId }) => {
         });
 
         displayData.push(totalsRow);
+
+        console.log(
+          `Final display data for ${sheetKey}:`,
+          displayData.length > 0 ? displayData[0] : "No display data"
+        );
 
         const ws = XLSX.utils.json_to_sheet(displayData);
         let sheetName = sheetKey;
