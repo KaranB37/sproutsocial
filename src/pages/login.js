@@ -13,19 +13,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const router = useRouter();
   const { login, isAuthenticated } = useAuth();
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated - using window.location for most reliable redirection
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (isAuthenticated() && !redirecting) {
       console.log(
         "User is already authenticated, redirecting to group selection..."
       );
-      // Use router.replace for immediate redirection without adding to history
-      router.replace("/groupSelection");
+      setRedirecting(true);
+      window.location.href = "/groupSelection";
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, redirecting]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -52,18 +53,11 @@ export default function LoginPage() {
         login(data.user, data.token);
         toast.success("Login successful!");
 
-        // Use window.location.href as a fallback redirection method
-        setTimeout(() => {
-          // Use router.replace instead of push for more reliable navigation
-          router.replace("/groupSelection");
+        setRedirecting(true);
 
-          // If router navigation fails, use direct location change as backup
-          setTimeout(() => {
-            if (window.location.pathname !== "/groupSelection") {
-              window.location.href = "/groupSelection";
-            }
-          }, 500);
-        }, 100);
+        // Force a hard redirect with window.location
+        // This is the most reliable method across different environments
+        window.location.href = "/groupSelection";
       } else {
         toast.error("Authentication failed. Please check your credentials.");
         setError(
@@ -95,37 +89,46 @@ export default function LoginPage() {
               {error}
             </Alert>
           )}
-          <form onSubmit={handleLogin}>
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  placeholder="Enter your username"
-                  className="text-white"
-                />
+          {redirecting ? (
+            <div className="text-center p-4">
+              <p>Redirecting to Group Selection...</p>
+              <div className="mt-2 flex justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="text-white"
-                  placeholder="Enter your password"
-                />
-              </div>
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? "Signing in..." : "Sign In"}
-              </Button>
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleLogin}>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    placeholder="Enter your username"
+                    className="text-white"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="text-white"
+                    placeholder="Enter your password"
+                  />
+                </div>
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? "Signing in..." : "Sign In"}
+                </Button>
+              </div>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>
