@@ -1,8 +1,13 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { getProfileAnalytics } from "@/api/analytics";
 import { getNetworkFormatter } from "@/utils/analyticsFormatters";
 import { groupDataByReportingPeriod } from "@/utils/reportingPeriodUtils";
+import {
+  getAllRequiredMetricIds,
+  filterOutCalculatedMetrics,
+  getPercentageFormattedMetrics,
+} from "@/utils/metricDefinitions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button.jsx";
 import {
@@ -25,6 +30,13 @@ import { format, isValid } from "date-fns";
 import { CalendarIcon, BarChart3, Loader2 } from "lucide-react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { toast } from "react-hot-toast";
+import {
+  formatFacebookAnalytics,
+  formatTwitterAnalytics,
+  genericFormatter,
+} from "@/utils/analyticsFormatters";
+import { FACEBOOK_CALCULATED_METRICS } from "@/utils/metricDefinitions";
 
 // Define reporting period options
 const REPORTING_PERIODS = [
@@ -125,20 +137,11 @@ const NETWORK_METRICS = {
     },
     { id: "video_views_partial_repeat", label: "Replayed Partial Video Views" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
-    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
-    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
+    // New calculated metrics - include them from the shared module
+    ...FACEBOOK_CALCULATED_METRICS,
   ],
   fb_instagram_account: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
-    {
-      id: "lifetime_snapshot.followers_by_age_gender",
-      label: "Followers By Age & Gender",
-    },
-    { id: "lifetime_snapshot.followers_by_city", label: "Followers By City" },
-    {
-      id: "lifetime_snapshot.followers_by_country",
-      label: "Followers By Country",
-    },
     { id: "net_follower_growth", label: "Net Follower Growth" },
     { id: "followers_gained", label: "Followers Gained" },
     { id: "followers_lost", label: "Followers Lost" },
@@ -154,8 +157,6 @@ const NETWORK_METRICS = {
     { id: "shares_count", label: "Shares" },
     { id: "story_replies", label: "Story Replies" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
-    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
-    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
   linkedin_company: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
@@ -175,8 +176,6 @@ const NETWORK_METRICS = {
     { id: "shares_count", label: "Shares" },
     { id: "post_content_clicks", label: "Post Clicks (All)" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
-    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
-    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
 
   youtube: [
@@ -213,8 +212,6 @@ const NETWORK_METRICS = {
     { id: "post_app_installs", label: "App Install Attempts" },
     { id: "post_app_opens", label: "App Opens" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
-    { id: "posts_sent_by_post_type", label: "Posts Sent By Post Type" },
-    { id: "posts_sent_by_content_type", label: "Posts Sent By Content Type" },
   ],
   tiktok: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
@@ -234,16 +231,48 @@ const NETWORK_METRICS = {
 const Analytics = ({ profiles, customerId }) => {
   // State for form inputs
   const [reportingPeriod, setReportingPeriod] = useState("daily");
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [selectedNetworkType, setSelectedNetworkType] = useState("");
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [selectedNetworkType, setSelectedNetworkType] = useState("facebook");
   const [selectedProfiles, setSelectedProfiles] = useState([]);
-  const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({});
+  const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({
+    facebook: [],
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showConfigPanel, setShowConfigPanel] = useState(true);
-  const [selectedNetworks, setSelectedNetworks] = useState([]);
+  const [selectedNetworks, setSelectedNetworks] = useState(["facebook"]);
   const [showNetworkSelector, setShowNetworkSelector] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState(null);
+
+  // Add a useEffect to initialize the network type if there are profiles
+  useEffect(() => {
+    if (profiles && profiles.length > 0) {
+      // Get the first available network type
+      const networkTypes = new Set(profiles.map((p) => p.network_type));
+      if (networkTypes.size > 0) {
+        const firstNetworkType = Array.from(networkTypes)[0];
+        console.log("Setting initial network type to:", firstNetworkType);
+
+        // If we see fb_page or facebook, use 'facebook' as the type
+        const normalizedType =
+          firstNetworkType === "fb_page" ? "facebook" : firstNetworkType;
+
+        setSelectedNetworkType(normalizedType);
+
+        // Initialize the selectedNetworks array as well
+        if (!selectedNetworks.includes(normalizedType)) {
+          setSelectedNetworks([normalizedType]);
+        }
+
+        // Initialize the selectedMetricsByNetwork with an empty array for this network
+        setSelectedMetricsByNetwork((prev) => ({
+          ...prev,
+          [normalizedType]: prev[normalizedType] || [],
+        }));
+      }
+    }
+  }, [profiles]);
 
   // Safe date formatting function
   const safeFormat = (date, formatStr) => {
@@ -287,12 +316,49 @@ const Analytics = ({ profiles, customerId }) => {
   // Handle metric selection
   const handleMetricSelection = (networkType, metricId) => {
     setSelectedMetricsByNetwork((prev) => {
+      // Initialize the network metrics array if it doesn't exist
       const networkMetrics = prev[networkType] || [];
+      let updatedNetworkMetrics = [...networkMetrics];
 
-      // Toggle the metric for this specific network
-      const updatedNetworkMetrics = networkMetrics.includes(metricId)
-        ? networkMetrics.filter((id) => id !== metricId)
-        : [...networkMetrics, metricId];
+      // Check if we're dealing with a network that has calculated metrics
+      let metricsKey = networkType;
+      if (networkType === "facebook" || networkType === "fb_page") {
+        metricsKey = "facebook";
+      }
+
+      // Find the metric definition
+      const metrics = NETWORK_METRICS[metricsKey] || [];
+      const selectedMetric = metrics.find((metric) => metric.id === metricId);
+
+      // Toggle the metric selection
+      if (updatedNetworkMetrics.includes(metricId)) {
+        // Removing the metric
+        updatedNetworkMetrics = updatedNetworkMetrics.filter(
+          (id) => id !== metricId
+        );
+      } else {
+        // Adding the metric
+        updatedNetworkMetrics.push(metricId);
+
+        // If it's a calculated metric, automatically select its dependencies
+        if (
+          selectedMetric &&
+          selectedMetric.isCalculated &&
+          selectedMetric.dependsOn
+        ) {
+          selectedMetric.dependsOn.forEach((dependency) => {
+            if (!updatedNetworkMetrics.includes(dependency)) {
+              console.log(
+                `Auto-selecting dependency ${dependency} for ${metricId}`
+              );
+              updatedNetworkMetrics.push(dependency);
+            }
+          });
+        }
+      }
+
+      // Log the updated metrics for debugging
+      console.log(`Updated metrics for ${networkType}:`, updatedNetworkMetrics);
 
       return {
         ...prev,
@@ -329,270 +395,377 @@ const Analytics = ({ profiles, customerId }) => {
   /**
    * Generate the analytics report based on selected options
    */
-  const generateReport = async () => {
+  const generateReport = async (format = "json") => {
     setLoading(true);
     setError(null);
 
     try {
-      // Fix timezone issues by using date strings in local time
-      const formattedStartDate = new Date(startDate);
-      const startYear = formattedStartDate.getFullYear();
-      const startMonth = String(formattedStartDate.getMonth() + 1).padStart(
-        2,
-        "0"
-      );
-      const startDay = String(formattedStartDate.getDate()).padStart(2, "0");
-      const startDateStr = `${startYear}-${startMonth}-${startDay}`;
+      // Get metrics for the selected network
+      const selectedMetrics =
+        selectedMetricsByNetwork[selectedNetworkType] || [];
 
-      const formattedEndDate = new Date(endDate);
-      const endYear = formattedEndDate.getFullYear();
-      const endMonth = String(formattedEndDate.getMonth() + 1).padStart(2, "0");
-      const endDay = String(formattedEndDate.getDate()).padStart(2, "0");
-      const endDateStr = `${endYear}-${endMonth}-${endDay}`;
+      // Get the selected metrics with all dependencies for calculated metrics
+      const apiMetrics = getMetricsWithDependencies(selectedMetrics);
 
-      console.log(`Original dates: ${startDate} to ${endDate}`);
-      console.log(`Formatted dates: ${startDateStr} to ${endDateStr}`);
-      console.log(`Selected reporting period: ${reportingPeriod}`);
+      console.log("Fetching analytics with metrics:", apiMetrics);
 
-      // Collect all selected profiles and their corresponding metrics by network
-      const reportData = [];
-      const numericColumns = new Set();
+      let response;
 
-      // Process each network separately
-      for (const networkType of selectedNetworks) {
-        const networkProfiles = selectedProfiles.filter((profileId) => {
-          const profile = profiles.find(
-            (p) => p.customer_profile_id === profileId
-          );
-          return (
-            profile &&
-            (profile.network_type === networkType ||
-              (networkType === "facebook" &&
-                (profile.network_type === "fb_page" ||
-                  profile.network_type === "facebook")))
-          );
+      if (
+        selectedNetworkType === "facebook" ||
+        selectedNetworkType === "fb_instagram_account"
+      ) {
+        response = await getProfileAnalytics({
+          customerId,
+          profileId: selectedProfiles,
+          startDate: safeFormat(startDate, "yyyy-MM-dd"),
+          endDate: safeFormat(endDate, "yyyy-MM-dd"),
+          reportingPeriod: reportingPeriod,
+          metrics: apiMetrics,
         });
-
-        // Skip if no profiles selected for this network
-        if (networkProfiles.length === 0) continue;
-
-        // Get the metrics selected for this network
-        const networkMetrics = selectedMetricsByNetwork[networkType] || [];
-
-        // Skip if no metrics selected for this network
-        if (networkMetrics.length === 0) continue;
-
-        try {
-          // Fetch data for this network
-          const response = await getProfileAnalytics({
-            customerId,
-            profileId: networkProfiles,
-            startDate: startDateStr,
-            endDate: endDateStr,
-            reportingPeriod: "daily",
-            metrics: networkMetrics,
-          });
-
-          // Check if the response has the expected structure
-          if (!response || !response.data) {
-            console.error(
-              `Invalid response format for ${networkType}:`,
-              response
-            );
-            continue;
-          }
-
-          console.log(`Raw API response for ${networkType}:`, response);
-
-          // Format the data using the appropriate formatter
-          const formatter = getNetworkFormatter(networkType);
-          const formattedData = formatter(response, networkMetrics);
-
-          // Log the formatted data for debugging
-          console.log(
-            `Formatted data for ${networkType}:`,
-            formattedData.length > 0 ? formattedData[0] : "No formatted data"
-          );
-          console.log(`All formatted rows: ${formattedData.length}`);
-
-          // Aggregate data by reporting period
-          const aggregatedData = aggregateDataByPeriod(
-            formattedData,
-            reportingPeriod
-          );
-
-          // Populate numericColumns
-          aggregatedData.forEach((row) => {
-            Object.keys(row).forEach((key) => {
-              if (typeof row[key] === "number" && !isNaN(row[key])) {
-                numericColumns.add(key);
-              }
-            });
-          });
-
-          // After calculating totals
-          console.log("Aggregated Data:", aggregatedData);
-          console.log("Numeric Columns:", Array.from(numericColumns));
-
-          // Add to the combined report data
-          reportData.push(...aggregatedData);
-        } catch (networkError) {
-          console.error(
-            `Error fetching data for ${networkType}:`,
-            networkError
-          );
-          // Continue with other networks even if one fails
-        }
-      }
-
-      // Group data by network and profile for Excel export
-      const dataByNetworkAndProfile = {};
-
-      // Process each data point and organize by network and profile
-      reportData.forEach((row) => {
-        const network = row.Network;
-        const profileId = row.profile_id;
-
-        // Find the profile name
-        const profile = profiles.find(
-          (p) => p.customer_profile_id === profileId
-        );
-        const profileName = profile ? profile.name : `Profile ${profileId}`;
-
-        // Create a sheet key in the format "NetworkName-ProfileName"
-        const sheetKey = `${network}-${profileName}`;
-
-        // Initialize the array for this network-profile if it doesn't exist
-        if (!dataByNetworkAndProfile[sheetKey]) {
-          dataByNetworkAndProfile[sheetKey] = [];
-        }
-
-        // Add the data row to the appropriate network-profile group
-        dataByNetworkAndProfile[sheetKey].push(row);
-      });
-
-      // Export the data to Excel with separate sheets for each network-profile
-      if (Object.keys(dataByNetworkAndProfile).length > 0) {
-        await exportToExcel(dataByNetworkAndProfile);
       } else {
-        setError("No data available for the selected criteria");
+        response = await getProfileAnalytics({
+          customerId,
+          profileId: selectedProfiles,
+          startDate: safeFormat(startDate, "yyyy-MM-dd"),
+          endDate: safeFormat(endDate, "yyyy-MM-dd"),
+          reportingPeriod: reportingPeriod,
+          metrics: apiMetrics,
+        });
       }
-    } catch (err) {
-      console.error("Error generating report:", err);
-      setError("Failed to generate report: " + err.message);
+
+      console.log("Raw API response:", response);
+
+      if (!response || !response.data) {
+        throw new Error("Invalid response from analytics API");
+      }
+
+      if (format === "json") {
+        // For JSON output, we keep the raw data from the API
+        const formattedData = response.data;
+        return formattedData;
+      } else if (format === "excel") {
+        // For Excel, format the data according to profile type
+        let formattedData;
+
+        if (selectedNetworkType === "facebook") {
+          // Pass both selected metrics and API metrics to ensure all dependencies are available
+          formattedData = formatFacebookAnalytics(
+            response.data,
+            selectedMetrics
+          );
+        } else if (selectedNetworkType === "twitter") {
+          formattedData = formatTwitterAnalytics(
+            response.data,
+            selectedMetrics
+          );
+        } else {
+          formattedData = genericFormatter(response.data, selectedMetrics);
+        }
+
+        return formattedData;
+      }
+    } catch (error) {
+      console.error("Error generating report:", error);
+      setError(`Error generating report: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Update the exportToExcel function with better debugging
-  const exportToExcel = async (dataByNetworkAndProfile) => {
-    try {
-      const wb = XLSX.utils.book_new();
+  // Add this helper function to get all required metrics including dependencies
+  const getMetricsWithDependencies = (
+    selectedMetrics = [],
+    networkType = selectedNetworkType
+  ) => {
+    if (!selectedMetrics || !Array.isArray(selectedMetrics)) {
+      console.warn("Invalid selectedMetrics provided:", selectedMetrics);
+      return [];
+    }
 
-      Object.entries(dataByNetworkAndProfile).forEach(([sheetKey, data]) => {
-        if (!data || data.length === 0) return;
+    const metricsWithDependencies = new Set(selectedMetrics);
 
-        console.log(`Processing sheet: ${sheetKey}`);
-        console.log(`Data sample for ${sheetKey}:`, data[0]);
+    // Only look for dependencies if we're dealing with Facebook metrics
+    if (networkType === "facebook" || networkType === "fb_page") {
+      // Find dependencies for selected metrics from the FACEBOOK_CALCULATED_METRICS
+      selectedMetrics.forEach((metricId) => {
+        if (!metricId) return; // Skip null/undefined metrics
 
-        const aggregatedData = aggregateDataByPeriod(data, reportingPeriod);
-        const totalsRow = { Date: "TOTAL" };
+        const calculatedMetric = FACEBOOK_CALCULATED_METRICS.find(
+          (m) => m.id === metricId
+        );
 
-        const numericColumns = new Set();
-        let followerMetricFound = false;
-
-        aggregatedData.forEach((row) => {
-          Object.entries(row).forEach(([key, value]) => {
-            if (
-              key === "lifetime_snapshot.followers_count" &&
-              value !== null &&
-              value !== undefined
-            ) {
-              followerMetricFound = true;
-              console.log(`Found follower count in data: ${value}`);
-            }
-
-            if (
-              key !== "Date" &&
-              key !== "Network" &&
-              key !== "profile_id" &&
-              typeof value === "number" &&
-              !isNaN(value)
-            ) {
-              numericColumns.add(key);
+        if (calculatedMetric && calculatedMetric.dependsOn) {
+          calculatedMetric.dependsOn.forEach((depMetric) => {
+            if (depMetric) {
+              // Make sure the dependency is valid
+              metricsWithDependencies.add(depMetric);
+              console.log(`Added dependency ${depMetric} for ${metricId}`);
             }
           });
-        });
-
-        console.log(
-          `Numeric columns for ${sheetKey}:`,
-          Array.from(numericColumns)
-        );
-        console.log(`Follower metric found: ${followerMetricFound}`);
-
-        numericColumns.forEach((column) => {
-          totalsRow[column] = aggregatedData.reduce((sum, row) => {
-            return sum + (typeof row[column] === "number" ? row[column] : 0);
-          }, 0);
-        });
-
-        // Add lifetime followers count from the last entry
-        const lastEntry =
-          aggregatedData.length > 0
-            ? aggregatedData[aggregatedData.length - 1]
-            : null;
-        if (
-          lastEntry &&
-          lastEntry["lifetime_snapshot.followers_count"] !== undefined
-        ) {
-          console.log(
-            `Using last entry's follower count: ${lastEntry["lifetime_snapshot.followers_count"]}`
-          );
-          totalsRow["lifetime_snapshot.followers_count"] =
-            lastEntry["lifetime_snapshot.followers_count"];
-        } else if (lastEntry) {
-          console.log("Last entry does not have follower count:", lastEntry);
-        } else {
-          console.log("No entries found for aggregated data");
         }
+      });
+    }
 
-        console.log("Totals Row:", totalsRow);
+    const result = Array.from(metricsWithDependencies).filter(Boolean); // Filter out null/undefined
+    console.log(`Final metrics for ${networkType}:`, result);
+    return result;
+  };
 
-        const filteredData = aggregatedData.filter(
-          (row) => row.Date !== "TOTAL"
-        );
+  /**
+   * Export analytics data to Excel
+   * @param {Array} data - The data to export
+   */
+  const exportToExcel = async (data) => {
+    try {
+      if (!data || data.length === 0) {
+        setError("No data available to export");
+        return;
+      }
 
-        const displayData = filteredData.map((row) => {
-          const { profile_id, ...rest } = row;
-          return rest;
+      console.log(`Preparing ${data.length} rows for Excel export`);
+      console.log("Sample data row:", data[0]);
+
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
+
+      // Process the data for Excel
+      const processedData = data.map((row) => {
+        const formattedRow = { ...row };
+
+        // Format rate metrics as percentages
+        Object.keys(formattedRow).forEach((key) => {
+          // Check if this is a rate metric that should be formatted as percentage
+          const isRateMetric = key.includes("rate") || key.includes("Rate");
+
+          if (isRateMetric && typeof formattedRow[key] === "number") {
+            // Format as percentage with 2 decimal places
+            formattedRow[key] = formattedRow[key] * 100;
+            console.log(
+              `Formatting ${key} as percentage: ${formattedRow[key]}%`
+            );
+          }
+
+          // Convert any objects or arrays to strings
+          if (
+            typeof formattedRow[key] === "object" &&
+            formattedRow[key] !== null
+          ) {
+            formattedRow[key] = JSON.stringify(formattedRow[key]);
+          }
         });
 
-        displayData.push(totalsRow);
-
-        console.log(
-          `Final display data for ${sheetKey}:`,
-          displayData.length > 0 ? displayData[0] : "No display data"
-        );
-
-        const ws = XLSX.utils.json_to_sheet(displayData);
-        let sheetName = sheetKey;
-        if (sheetName.length > 31) {
-          sheetName = sheetName.substring(0, 31);
-        }
-        sheetName = sheetName.replace(/[*?:\/\\[\]]/g, "_");
-
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        return formattedRow;
       });
 
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(processedData);
+
+      // Add percentage formatting for rate columns
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+
+      // Check each column header to see if it's a rate
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const headerCellRef = XLSX.utils.encode_cell({ r: 0, c: C });
+        const headerCell = ws[headerCellRef];
+
+        if (
+          headerCell &&
+          (headerCell.v.includes("rate") || headerCell.v.includes("Rate"))
+        ) {
+          // Apply percentage format to all cells in this column
+          for (let R = 1; R <= range.e.r; R++) {
+            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            if (ws[cellRef]) {
+              ws[cellRef].z = '0.00"%"';
+            }
+          }
+        }
+      }
+
+      // Add the sheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Social Analytics");
+
+      // Generate filename with date range
       const startStr = safeFormat(startDate, "yyyy-MM-dd");
       const endStr = safeFormat(endDate, "yyyy-MM-dd");
-      const filename = `social_media_analytics_${startStr}_to_${endStr}_${reportingPeriod}.xlsx`;
+      const filename = `SproutSocial_Analytics_${startStr}_to_${endStr}.xlsx`;
 
+      // Export the workbook
       XLSX.writeFile(wb, filename);
-    } catch (err) {
-      console.error("Error exporting to Excel:", err);
-      setError("Failed to export data to Excel: " + err.message);
+
+      toast.success("Excel file exported successfully!");
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      setError(`Error exporting to Excel: ${error.message}`);
+      throw error; // Re-throw to allow proper error handling in calling function
+    }
+  };
+
+  // Add helper function to check if metrics are selected for the active network
+  const hasSelectedMetrics = () => {
+    // Find which networks have profiles selected
+    const networksWithSelectedProfiles = selectedNetworks.filter(
+      (networkType) => {
+        const networkProfiles = profiles.filter(
+          (profile) =>
+            profile.network_type === networkType ||
+            (networkType === "facebook" &&
+              (profile.network_type === "fb_page" ||
+                profile.network_type === "facebook"))
+        );
+
+        const selectedProfilesForNetwork = selectedProfiles.filter(
+          (profileId) =>
+            networkProfiles.some(
+              (profile) => profile.customer_profile_id === profileId
+            )
+        );
+
+        return selectedProfilesForNetwork.length > 0;
+      }
+    );
+
+    // Check if any of these networks have metrics selected
+    const hasMetrics = networksWithSelectedProfiles.some((networkType) => {
+      const metrics = selectedMetricsByNetwork[networkType];
+      return metrics && metrics.length > 0;
+    });
+
+    return hasMetrics;
+  };
+
+  // Update the handleExportToExcel function to use exportNetworkType
+  const handleExportToExcel = async () => {
+    setLoading(true);
+    setError(null);
+    setAnalyticsData(null); // Clear previous data
+
+    try {
+      // Validate inputs
+      if (!startDate || !endDate) {
+        setError("Please select start and end dates");
+        return;
+      }
+
+      if (selectedProfiles.length === 0) {
+        setError("Please select at least one profile");
+        return;
+      }
+
+      // Find which network type we're exporting data for based on selected profiles
+      let exportNetworkType = selectedNetworkType;
+      const selectedProfileObjects = profiles.filter((p) =>
+        selectedProfiles.includes(p.customer_profile_id)
+      );
+
+      if (selectedProfileObjects.length > 0) {
+        // Get network type from the first selected profile
+        const firstProfileType = selectedProfileObjects[0].network_type;
+
+        // Normalize Facebook network types
+        if (firstProfileType === "fb_page" || firstProfileType === "facebook") {
+          exportNetworkType = "facebook";
+        } else {
+          exportNetworkType = firstProfileType;
+        }
+
+        console.log(
+          "Export network type based on profiles:",
+          exportNetworkType
+        );
+      }
+
+      // Get metrics for the determined network type
+      const selectedMetrics = selectedMetricsByNetwork[exportNetworkType] || [];
+      console.log("Export network type:", exportNetworkType);
+      console.log("All selected metrics by network:", selectedMetricsByNetwork);
+      console.log("Selected metrics for export:", selectedMetrics);
+
+      if (!selectedMetrics || selectedMetrics.length === 0) {
+        setError(`Please select at least one metric for ${exportNetworkType}`);
+        return;
+      }
+
+      // Get all required metrics including dependencies
+      const apiMetrics = getMetricsWithDependencies(
+        selectedMetrics,
+        exportNetworkType
+      );
+      console.log("API metrics with dependencies:", apiMetrics);
+
+      // Continue with API call using the determined network type and metrics
+      let response;
+      try {
+        const apiParams = {
+          customerId,
+          profileId: selectedProfiles,
+          startDate: safeFormat(startDate, "yyyy-MM-dd"),
+          endDate: safeFormat(endDate, "yyyy-MM-dd"),
+          reportingPeriod: reportingPeriod,
+          metrics: apiMetrics,
+        };
+
+        console.log("API request params:", apiParams);
+
+        response = await getProfileAnalytics(apiParams);
+        console.log("Raw API response:", response);
+      } catch (apiError) {
+        console.error("API call failed:", apiError);
+        setError(`API request failed: ${apiError.message}`);
+        return;
+      }
+
+      if (!response) {
+        setError("API returned no response");
+        return;
+      }
+
+      // Format the data according to profile type
+      let formattedData;
+      try {
+        console.log("Formatting data for network type:", exportNetworkType);
+
+        if (
+          exportNetworkType === "facebook" ||
+          exportNetworkType === "fb_page"
+        ) {
+          formattedData = formatFacebookAnalytics(response, selectedMetrics);
+        } else if (exportNetworkType === "twitter") {
+          formattedData = formatTwitterAnalytics(response, selectedMetrics);
+        } else {
+          formattedData = genericFormatter(response, selectedMetrics);
+        }
+
+        console.log("Formatted data sample:", formattedData.slice(0, 2));
+        console.log("Total rows:", formattedData.length);
+      } catch (formatError) {
+        console.error("Error formatting data:", formatError);
+        setError(`Error formatting data: ${formatError.message}`);
+        return;
+      }
+
+      if (!formattedData || formattedData.length === 0) {
+        setError("No data available to export after formatting");
+        return;
+      }
+
+      // After successfully formatting the data, update the state
+      setAnalyticsData(formattedData);
+
+      // Export to Excel
+      try {
+        await exportToExcel(formattedData);
+        toast.success("Excel file exported successfully!");
+      } catch (exportError) {
+        console.error("Error exporting to Excel:", exportError);
+        setError(`Error exporting to Excel: ${exportError.message}`);
+      }
+    } catch (error) {
+      console.error("General error:", error);
+      setError(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -846,38 +1019,31 @@ const Analytics = ({ profiles, customerId }) => {
 
       <div className="flex justify-end space-x-2">
         <Button
-          onClick={generateReport}
+          onClick={handleExportToExcel}
           disabled={
-            loading ||
-            selectedProfiles.length === 0 ||
-            Object.keys(selectedMetricsByNetwork).length === 0
+            loading || selectedProfiles.length === 0 || !hasSelectedMetrics()
           }
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="bg-primary text-white py-2 px-4 rounded hover:bg-primary-dark"
         >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Generate Report
-            </>
-          )}
+          {loading ? "Exporting..." : "Export to Excel"}
         </Button>
       </div>
-
-      {selectedProfiles.length === 0 ||
-      Object.keys(selectedMetricsByNetwork).length === 0 ? (
-        <div className="p-4 mt-4 border border-yellow-200 bg-yellow-50 rounded-md text-yellow-800">
-          Please select at least one network and metric
-        </div>
-      ) : null}
 
       {error && (
         <div className="p-4 mt-4 border border-red-200 bg-red-50 rounded-md text-red-800">
           {error}
+        </div>
+      )}
+
+      {selectedProfiles.length === 0 && (
+        <div className="p-4 mt-4 border border-yellow-200 bg-yellow-50 rounded-md text-yellow-800">
+          Please select at least one profile
+        </div>
+      )}
+
+      {selectedProfiles.length > 0 && !hasSelectedMetrics() && (
+        <div className="p-4 mt-4 border border-yellow-200 bg-yellow-50 rounded-md text-yellow-800">
+          Please select at least one metric
         </div>
       )}
     </div>
