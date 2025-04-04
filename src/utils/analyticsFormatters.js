@@ -1,6 +1,9 @@
-import { FACEBOOK_CALCULATED_METRICS } from "@/utils/metricDefinitions";
-import { INSTAGRAM_CALCULATED_METRICS } from "@/utils/metricDefinitions";
-import { LINKEDIN_CALCULATED_METRICS } from "@/utils/metricDefinitions";
+import {
+  FACEBOOK_CALCULATED_METRICS,
+  INSTAGRAM_CALCULATED_METRICS,
+  LINKEDIN_CALCULATED_METRICS,
+  TWITTER_CALCULATED_METRICS,
+} from "@/utils/metricDefinitions";
 
 /**
  * Format Instagram analytics data for Excel export
@@ -739,8 +742,35 @@ export const formatTwitterAnalytics = (response, selectedMetrics) => {
       );
     }
 
+    // Create a list of all metrics including dependencies
+    const metricsWithDependencies = new Set(selectedMetrics);
+
+    // Add dependencies for Twitter calculated metrics
+    selectedMetrics.forEach((metric) => {
+      if (!metric) return; // Skip null/undefined metrics
+
+      const calculatedMetric = TWITTER_CALCULATED_METRICS.find(
+        (m) => m.id === metric
+      );
+
+      if (calculatedMetric && calculatedMetric.dependsOn) {
+        calculatedMetric.dependsOn.forEach((depMetric) => {
+          if (depMetric) {
+            // Make sure the dependency is valid
+            metricsWithDependencies.add(depMetric);
+            console.log(`Added Twitter dependency ${depMetric} for ${metric}`);
+          }
+        });
+      }
+    });
+
+    console.log(
+      "Final Twitter metrics with dependencies:",
+      Array.from(metricsWithDependencies)
+    );
+
     // Create the formatted data array
-    return dataValues.map((item, index) => {
+    const formattedData = dataValues.map((item, index) => {
       // Initialize the formatted item with standard fields
       const date =
         item.dimensions && item.dimensions["reporting_period.by(day)"]
@@ -763,7 +793,12 @@ export const formatTwitterAnalytics = (response, selectedMetrics) => {
       );
 
       // Process all selected metrics
-      selectedMetrics.forEach((metricId) => {
+      metricsWithDependencies.forEach((metricId) => {
+        // Skip calculated metrics - we'll handle them after collecting all base metrics
+        if (TWITTER_CALCULATED_METRICS.some((m) => m.id === metricId)) {
+          return;
+        }
+
         // Special case for follower count
         if (metricId === "lifetime_snapshot.followers_count") {
           formattedItem[metricId] = getFollowersCount(item);
@@ -836,8 +871,33 @@ export const formatTwitterAnalytics = (response, selectedMetrics) => {
         }
       });
 
+      // Now calculate all the Twitter calculated metrics
+      TWITTER_CALCULATED_METRICS.forEach((calculatedMetric) => {
+        if (selectedMetrics.includes(calculatedMetric.id)) {
+          try {
+            console.log(`Calculating Twitter ${calculatedMetric.id}`);
+            const result = calculatedMetric.calculate(formattedItem);
+            formattedItem[calculatedMetric.id] = result;
+            console.log(
+              `Calculated Twitter ${calculatedMetric.id} = ${result}`
+            );
+          } catch (error) {
+            console.error(
+              `Error calculating Twitter metric ${calculatedMetric.id}:`,
+              error
+            );
+            formattedItem[calculatedMetric.id] = null;
+          }
+        }
+      });
+
       return formattedItem;
     });
+
+    console.log(
+      `Twitter formatter produced ${formattedData.length} formatted rows`
+    );
+    return formattedData;
   } catch (error) {
     console.error("Error formatting Twitter analytics:", error);
     console.error(error.stack);

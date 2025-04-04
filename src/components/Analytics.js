@@ -41,6 +41,7 @@ import {
   FACEBOOK_CALCULATED_METRICS,
   INSTAGRAM_CALCULATED_METRICS,
   LINKEDIN_CALCULATED_METRICS,
+  TWITTER_CALCULATED_METRICS,
 } from "@/utils/metricDefinitions";
 
 // Define reporting period options
@@ -218,6 +219,7 @@ const NETWORK_METRICS = {
     { id: "post_app_installs", label: "App Install Attempts" },
     { id: "post_app_opens", label: "App Opens" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    ...TWITTER_CALCULATED_METRICS,
   ],
   tiktok: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
@@ -534,6 +536,29 @@ const Analytics = ({ profiles, customerId }) => {
         }
       });
     }
+    // Handle Twitter (X) metrics
+    else if (networkType === "twitter") {
+      // Find dependencies for selected metrics from the TWITTER_CALCULATED_METRICS
+      selectedMetrics.forEach((metricId) => {
+        if (!metricId) return; // Skip null/undefined metrics
+
+        const calculatedMetric = TWITTER_CALCULATED_METRICS.find(
+          (m) => m.id === metricId
+        );
+
+        if (calculatedMetric && calculatedMetric.dependsOn) {
+          calculatedMetric.dependsOn.forEach((depMetric) => {
+            if (depMetric) {
+              // Make sure the dependency is valid
+              metricsWithDependencies.add(depMetric);
+              console.log(
+                `Added Twitter dependency ${depMetric} for ${metricId}`
+              );
+            }
+          });
+        }
+      });
+    }
 
     const result = Array.from(metricsWithDependencies).filter(Boolean); // Filter out null/undefined
     console.log(`Final metrics for ${networkType}:`, result);
@@ -585,7 +610,7 @@ const Analytics = ({ profiles, customerId }) => {
       for (const [profileId, profileData] of Object.entries(profilesData)) {
         // Find profile name from list of profiles
         const profile = profiles.find(
-          (p) => p.customer_profile_id === profileId
+          (p) => p.customer_profile_id.toString() === profileId.toString()
         );
         const profileName = profile
           ? profile.name || profile.native_name || profileId
@@ -626,15 +651,28 @@ const Analytics = ({ profiles, customerId }) => {
 
           // Replace profile_id with profile name and rename the column
           if ("profile_id" in formattedRow) {
-            // Get the proper profile name, not just the ID
+            // Look up the profile by ID and get the actual name
+            const rowProfileId = formattedRow.profile_id.toString();
             const profileObj = profiles.find(
-              (p) => p.customer_profile_id === profileId
+              (p) => p.customer_profile_id.toString() === rowProfileId
             );
-            const profileDisplayName = profileObj
-              ? profileObj.name || profileObj.native_name || profileName
-              : profileName;
 
-            formattedRow["Profile Name"] = profileDisplayName;
+            if (profileObj) {
+              // Use the profile's actual name
+              formattedRow["Profile Name"] =
+                profileObj.name || profileObj.native_name;
+              console.log(
+                `Found profile name: ${formattedRow["Profile Name"]} for ID: ${rowProfileId}`
+              );
+            } else {
+              // Fallback if profile not found
+              formattedRow["Profile Name"] = profileName;
+              console.log(
+                `Using fallback name: ${profileName} for ID: ${rowProfileId}`
+              );
+            }
+
+            // Remove the original profile_id property
             delete formattedRow.profile_id;
           }
 

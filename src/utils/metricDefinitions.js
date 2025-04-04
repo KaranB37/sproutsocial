@@ -292,6 +292,115 @@ export const LINKEDIN_CALCULATED_METRICS = [
 ];
 
 /**
+ * Metric definitions for Twitter (X) calculated metrics
+ */
+export const TWITTER_CALCULATED_METRICS = [
+  {
+    id: "calculated_engagements",
+    label: "Engagements (Sprout's default)",
+    isCalculated: true,
+    dependsOn: [
+      "likes",
+      "comments_count", // @Replies
+      "shares_count", // Reposts
+      "post_link_clicks",
+      "post_content_clicks_other",
+      "engagements_other",
+    ],
+    calculate: (metrics) => {
+      // Log the input values for debugging
+      console.log("Calculating Twitter engagements with inputs:", {
+        likes: metrics.likes,
+        replies: metrics.comments_count,
+        reposts: metrics.shares_count,
+        linkClicks: metrics.post_link_clicks,
+        otherClicks: metrics.post_content_clicks_other,
+        otherEngagements: metrics.engagements_other,
+      });
+
+      // Simple sum of all engagement metrics, with null/undefined safe handling
+      return (
+        (metrics.likes || 0) +
+        (metrics.comments_count || 0) + // @Replies
+        (metrics.shares_count || 0) + // Reposts
+        (metrics.post_link_clicks || 0) +
+        (metrics.post_content_clicks_other || 0) +
+        (metrics.engagements_other || 0)
+      );
+    },
+  },
+  {
+    id: "engagement_rate_per_follower",
+    label: "Engagement Rate (per Follower)",
+    isCalculated: true,
+    dependsOn: ["calculated_engagements", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get follower count
+      const followerCount = metrics["lifetime_snapshot.followers_count"];
+
+      // Log input values for debugging
+      console.log(
+        "Calculating Twitter engagement rate per follower with inputs:",
+        {
+          engagements: metrics.calculated_engagements,
+          followers: followerCount,
+        }
+      );
+
+      // Make sure the denominator is valid to avoid division by zero
+      if (!followerCount || followerCount === 0) {
+        console.log("No followers found, returning 0");
+        return 0;
+      }
+
+      // Simple division - make sure calculated_engagements is available
+      const engagements = metrics.calculated_engagements || 0;
+      const result = engagements / followerCount;
+      console.log(`Twitter engagement rate per follower: ${result}`);
+      return result;
+    },
+  },
+  {
+    id: "engagement_rate_per_impression",
+    label: "Engagement Rate (per Impression)",
+    isCalculated: true,
+    dependsOn: ["calculated_engagements", "impressions"],
+    calculate: (metrics) => {
+      // Make sure the denominator is valid to avoid division by zero
+      if (!metrics.impressions || metrics.impressions === 0) {
+        console.log("No impressions found, returning 0");
+        return 0;
+      }
+
+      // Simple division - make sure calculated_engagements is available
+      const engagements = metrics.calculated_engagements || 0;
+      const result = engagements / metrics.impressions;
+      console.log(`Twitter engagement rate per impression: ${result}`);
+      return result;
+    },
+  },
+  {
+    id: "click_through_rate",
+    label: "Click-Through Rate",
+    isCalculated: true,
+    dependsOn: ["post_link_clicks", "impressions"],
+    calculate: (metrics) => {
+      // Make sure the denominator is valid to avoid division by zero
+      if (!metrics.impressions || metrics.impressions === 0) {
+        console.log("No impressions found, returning 0");
+        return 0;
+      }
+
+      // Simple division - make sure post_link_clicks is available
+      const clicks = metrics.post_link_clicks || 0;
+      const result = clicks / metrics.impressions;
+      console.log(`Twitter click-through rate: ${result}`);
+      return result;
+    },
+  },
+];
+
+/**
  * Helper function to get all dependency metric IDs for a given set of calculated metrics
  * @param {Array} selectedMetricIds - Array of selected metric IDs
  * @param {Array} calculatedMetricDefinitions - Array of metric definition objects
