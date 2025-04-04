@@ -35,11 +35,12 @@ import {
   formatFacebookAnalytics,
   formatTwitterAnalytics,
   formatInstagramAnalytics,
-  genericFormatter,
+  formatLinkedInAnalytics,
 } from "@/utils/analyticsFormatters";
 import {
   FACEBOOK_CALCULATED_METRICS,
   INSTAGRAM_CALCULATED_METRICS,
+  LINKEDIN_CALCULATED_METRICS,
 } from "@/utils/metricDefinitions";
 
 // Define reporting period options
@@ -180,6 +181,7 @@ const NETWORK_METRICS = {
     { id: "shares_count", label: "Shares" },
     { id: "post_content_clicks", label: "Post Clicks (All)" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    ...LINKEDIN_CALCULATED_METRICS,
   ],
 
   youtube: [
@@ -432,7 +434,10 @@ const Analytics = ({ profiles, customerId }) => {
             selectedMetrics
           );
         } else {
-          formattedData = genericFormatter(response.data, selectedMetrics);
+          formattedData = formatLinkedInAnalytics(
+            response.data,
+            selectedMetrics
+          );
         }
 
         return formattedData;
@@ -457,7 +462,7 @@ const Analytics = ({ profiles, customerId }) => {
 
     const metricsWithDependencies = new Set(selectedMetrics);
 
-    // Only look for dependencies if we're dealing with Facebook metrics
+    // Handle Facebook metrics
     if (networkType === "facebook" || networkType === "fb_page") {
       // Find dependencies for selected metrics from the FACEBOOK_CALCULATED_METRICS
       selectedMetrics.forEach((metricId) => {
@@ -472,7 +477,9 @@ const Analytics = ({ profiles, customerId }) => {
             if (depMetric) {
               // Make sure the dependency is valid
               metricsWithDependencies.add(depMetric);
-              console.log(`Added dependency ${depMetric} for ${metricId}`);
+              console.log(
+                `Added Facebook dependency ${depMetric} for ${metricId}`
+              );
             }
           });
         }
@@ -498,6 +505,29 @@ const Analytics = ({ profiles, customerId }) => {
               metricsWithDependencies.add(depMetric);
               console.log(
                 `Added Instagram dependency ${depMetric} for ${metricId}`
+              );
+            }
+          });
+        }
+      });
+    }
+    // Handle LinkedIn metrics
+    else if (networkType === "linkedin_company" || networkType === "linkedin") {
+      // Find dependencies for selected metrics from the LINKEDIN_CALCULATED_METRICS
+      selectedMetrics.forEach((metricId) => {
+        if (!metricId) return; // Skip null/undefined metrics
+
+        const calculatedMetric = LINKEDIN_CALCULATED_METRICS.find(
+          (m) => m.id === metricId
+        );
+
+        if (calculatedMetric && calculatedMetric.dependsOn) {
+          calculatedMetric.dependsOn.forEach((depMetric) => {
+            if (depMetric) {
+              // Make sure the dependency is valid
+              metricsWithDependencies.add(depMetric);
+              console.log(
+                `Added LinkedIn dependency ${depMetric} for ${metricId}`
               );
             }
           });
@@ -742,26 +772,14 @@ const Analytics = ({ profiles, customerId }) => {
         return;
       }
 
-      // Format the data according to profile type
+      // Format the data according to profile type using the network formatter
       let formattedData;
       try {
         console.log("Formatting data for network type:", exportNetworkType);
 
-        if (
-          exportNetworkType === "facebook" ||
-          exportNetworkType === "fb_page"
-        ) {
-          formattedData = formatFacebookAnalytics(response, selectedMetrics);
-        } else if (
-          exportNetworkType === "fb_instagram_account" ||
-          exportNetworkType === "instagram"
-        ) {
-          formattedData = formatInstagramAnalytics(response, selectedMetrics);
-        } else if (exportNetworkType === "twitter") {
-          formattedData = formatTwitterAnalytics(response, selectedMetrics);
-        } else {
-          formattedData = genericFormatter(response, selectedMetrics);
-        }
+        // Get the appropriate formatter based on network type
+        const formatter = getNetworkFormatter(exportNetworkType);
+        formattedData = formatter(response, selectedMetrics);
 
         console.log("Formatted data sample:", formattedData.slice(0, 2));
         console.log("Total rows:", formattedData.length);

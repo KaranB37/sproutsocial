@@ -208,6 +208,90 @@ export const INSTAGRAM_CALCULATED_METRICS = [
 ];
 
 /**
+ * Metric definitions for LinkedIn calculated metrics
+ */
+export const LINKEDIN_CALCULATED_METRICS = [
+  {
+    id: "calculated_engagements",
+    label: "Engagements (Sprout's default)",
+    isCalculated: true,
+    dependsOn: [
+      "reactions",
+      "comments_count",
+      "shares_count",
+      "post_content_clicks",
+    ],
+    calculate: (metrics) => {
+      // Log the input values for debugging
+      console.log("Calculating LinkedIn engagements with inputs:", {
+        reactions: metrics.reactions,
+        comments: metrics.comments_count,
+        shares: metrics.shares_count,
+        postClicks: metrics.post_content_clicks,
+      });
+
+      // Simple sum of all engagement metrics, with null/undefined safe handling
+      return (
+        (metrics.reactions || 0) +
+        (metrics.comments_count || 0) +
+        (metrics.shares_count || 0) +
+        (metrics.post_content_clicks || 0)
+      );
+    },
+  },
+  {
+    id: "engagement_rate_per_follower",
+    label: "Engagement Rate (per Follower)",
+    isCalculated: true,
+    dependsOn: ["calculated_engagements", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get follower count
+      const followerCount = metrics["lifetime_snapshot.followers_count"];
+
+      // Log input values for debugging
+      console.log(
+        "Calculating LinkedIn engagement rate per follower with inputs:",
+        {
+          engagements: metrics.calculated_engagements,
+          followers: followerCount,
+        }
+      );
+
+      // Make sure the denominator is valid to avoid division by zero
+      if (!followerCount || followerCount === 0) {
+        console.log("No followers found, returning 0");
+        return 0;
+      }
+
+      // Simple division - make sure calculated_engagements is available
+      const engagements = metrics.calculated_engagements || 0;
+      const result = engagements / followerCount;
+      console.log(`LinkedIn engagement rate per follower: ${result}`);
+      return result;
+    },
+  },
+  {
+    id: "engagement_rate_per_impression",
+    label: "Engagement Rate (per Impression)",
+    isCalculated: true,
+    dependsOn: ["calculated_engagements", "impressions"],
+    calculate: (metrics) => {
+      // Make sure the denominator is valid to avoid division by zero
+      if (!metrics.impressions || metrics.impressions === 0) {
+        console.log("No impressions found, returning 0");
+        return 0;
+      }
+
+      // Simple division - make sure calculated_engagements is available
+      const engagements = metrics.calculated_engagements || 0;
+      const result = engagements / metrics.impressions;
+      console.log(`LinkedIn engagement rate per impression: ${result}`);
+      return result;
+    },
+  },
+];
+
+/**
  * Helper function to get all dependency metric IDs for a given set of calculated metrics
  * @param {Array} selectedMetricIds - Array of selected metric IDs
  * @param {Array} calculatedMetricDefinitions - Array of metric definition objects

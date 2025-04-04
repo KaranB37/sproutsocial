@@ -1,5 +1,6 @@
 import { FACEBOOK_CALCULATED_METRICS } from "@/utils/metricDefinitions";
 import { INSTAGRAM_CALCULATED_METRICS } from "@/utils/metricDefinitions";
+import { LINKEDIN_CALCULATED_METRICS } from "@/utils/metricDefinitions";
 
 /**
  * Format Instagram analytics data for Excel export
@@ -230,81 +231,217 @@ export const formatInstagramAnalytics = (response, selectedMetrics) => {
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatLinkedInAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data.data)) {
-    console.error("Invalid response format for LinkedIn:", response);
-    return [];
-  }
+  try {
+    console.log("LinkedIn formatter received response type:", typeof response);
 
-  return response.data.data.map((item) => {
-    const { dimensions, metrics } = item;
-    const formattedRow = {
-      Date: dimensions["reporting_period.by(day)"],
-      Network: "LinkedIn",
-      profile_id: dimensions["customer_profile_id"],
-    };
+    // Handle different API response formats
+    let dataValues = [];
 
-    selectedMetrics.forEach((metricId) => {
-      if (metricId.includes(".")) {
-        // Handle nested metrics like lifetime_snapshot.followers_count
-        const [parent, child] = metricId.split(".");
-        if (metrics[parent] && metrics[parent][child] !== undefined) {
-          // For complex objects like followers_by_country, stringify them
-          if (
-            typeof metrics[parent][child] === "object" &&
-            metrics[parent][child] !== null
-          ) {
-            formattedRow[metricId] = JSON.stringify(metrics[parent][child]);
-          } else {
-            formattedRow[metricId] = metrics[parent][child];
-          }
-          console.log(
-            `LinkedIn: Found nested metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else if (metrics[metricId] !== undefined) {
-          // Try direct access as fallback
-          formattedRow[metricId] = metrics[metricId];
-          console.log(
-            `LinkedIn: Found direct metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else {
-          formattedRow[metricId] = null;
-          console.log(`LinkedIn: Metric not found: ${metricId}`);
-        }
-      } else if (
-        metricId === "followers_by_job_function" ||
-        metricId === "followers_by_seniority"
-      ) {
-        // Handle special case for LinkedIn-specific objects
-        if (metrics[metricId] && typeof metrics[metricId] === "object") {
-          formattedRow[metricId] = JSON.stringify(metrics[metricId]);
-          console.log(
-            `LinkedIn: Found structured metric ${metricId}:`,
-            formattedRow[metricId].substring(0, 50) + "..."
-          );
-        } else {
-          formattedRow[metricId] = null;
-          console.log(`LinkedIn: Structured metric not found: ${metricId}`);
-        }
+    // Special case for the exact format in the provided example
+    if (
+      response &&
+      response.data &&
+      response.data.data &&
+      Array.isArray(response.data.data)
+    ) {
+      dataValues = response.data.data;
+      console.log(
+        "Using the standard API response format with data.data array"
+      );
+    }
+    // Check for standard format (data.data array) within response directly
+    else if (response.data && Array.isArray(response.data.data)) {
+      dataValues = response.data.data;
+      console.log("Using data.data format");
+    }
+    // Check if response has values array directly
+    else if (response.values && Array.isArray(response.values)) {
+      dataValues = response.values;
+      console.log("Using direct values array from response");
+    }
+    // Check if response.data is an array
+    else if (Array.isArray(response.data)) {
+      dataValues = response.data;
+      console.log("Using response.data array");
+    }
+    // Single object response
+    else if (typeof response === "object" && response !== null) {
+      // Try to extract any data we can find
+      if (response.data && typeof response.data === "object") {
+        dataValues = [response.data];
+        console.log("Using single object response.data");
       } else {
-        // Handle regular metrics
-        formattedRow[metricId] =
-          metrics[metricId] !== undefined ? metrics[metricId] : null;
-        if (metrics[metricId] !== undefined) {
-          console.log(
-            `LinkedIn: Found standard metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else {
-          console.log(`LinkedIn: Metric not found: ${metricId}`);
-        }
+        dataValues = [response];
+        console.log("Using entire response as single data item");
+      }
+    }
+    // No recognizable format
+    else {
+      console.error("Unrecognized response format:", response);
+      return [];
+    }
+
+    console.log("Found dataValues array with length:", dataValues.length);
+
+    if (dataValues.length === 0) {
+      console.warn("No data values found in response");
+      return [];
+    }
+
+    // Log the first item structure to help debugging
+    if (dataValues.length > 0) {
+      const sampleItem = dataValues[0];
+      console.log(
+        "Sample data item:",
+        JSON.stringify(sampleItem).substring(0, 500) + "..."
+      );
+      console.log(
+        "Sample metrics:",
+        sampleItem.metrics
+          ? Object.keys(sampleItem.metrics)
+          : "No metrics object"
+      );
+      console.log("Sample follower count:", getFollowersCount(sampleItem));
+    }
+
+    // Create a list of all metrics including dependencies
+    const metricsWithDependencies = new Set(selectedMetrics);
+
+    // Add dependencies for LinkedIn calculated metrics
+    selectedMetrics.forEach((metric) => {
+      if (!metric) return; // Skip null/undefined metrics
+
+      const calculatedMetric = LINKEDIN_CALCULATED_METRICS.find(
+        (m) => m.id === metric
+      );
+
+      if (calculatedMetric && calculatedMetric.dependsOn) {
+        calculatedMetric.dependsOn.forEach((depMetric) => {
+          if (depMetric) {
+            // Make sure the dependency is valid
+            metricsWithDependencies.add(depMetric);
+            console.log(`Added LinkedIn dependency ${depMetric} for ${metric}`);
+          }
+        });
       }
     });
 
-    console.log("LinkedIn formatted row:", formattedRow);
-    return formattedRow;
-  });
+    console.log(
+      "Final LinkedIn metrics with dependencies:",
+      Array.from(metricsWithDependencies)
+    );
+
+    // Create the formatted data array
+    return dataValues.map((item, index) => {
+      // Initialize the formatted item with date and standard fields
+      const formattedItem = {
+        Date:
+          item.end_time ||
+          (item.dimensions && item.dimensions["reporting_period.by(day)"]) ||
+          "Unknown",
+        Network: "LinkedIn",
+        profile_id:
+          (item.dimensions && item.dimensions.customer_profile_id) ||
+          item.profile_id ||
+          "Unknown",
+      };
+
+      console.log(
+        `Processing LinkedIn item ${index} with date ${formattedItem.Date}`
+      );
+
+      // First, add all base metrics from the API response
+      for (const metric of metricsWithDependencies) {
+        // Skip calculated metrics for now, we'll handle them next
+        if (!LINKEDIN_CALCULATED_METRICS.some((cm) => cm.id === metric)) {
+          // Special case for follower count
+          if (metric === "lifetime_snapshot.followers_count") {
+            formattedItem[metric] = getFollowersCount(item);
+            console.log(
+              `Extracted follower count for LinkedIn item ${index}: ${formattedItem[metric]}`
+            );
+            continue;
+          }
+
+          // Handle nested metrics like lifetime_snapshot.followers_count
+          if (metric.includes(".")) {
+            const [parent, child] = metric.split(".");
+
+            // Check in metrics object first
+            if (
+              item.metrics &&
+              item.metrics[parent] &&
+              item.metrics[parent][child] !== undefined
+            ) {
+              formattedItem[metric] = item.metrics[parent][child];
+              console.log(
+                `Found ${metric} in metrics.${parent}.${child}: ${formattedItem[metric]}`
+              );
+            }
+            // Check if the full path is directly in metrics
+            else if (item.metrics && item.metrics[metric] !== undefined) {
+              formattedItem[metric] = item.metrics[metric];
+              console.log(
+                `Found ${metric} directly in metrics object: ${formattedItem[metric]}`
+              );
+            }
+            // Check in item object directly
+            else if (item[parent] && item[parent][child] !== undefined) {
+              formattedItem[metric] = item[parent][child];
+              console.log(
+                `Found ${metric} in item.${parent}.${child}: ${formattedItem[metric]}`
+              );
+            } else {
+              formattedItem[metric] = null;
+              console.log(`Could not find ${metric} in item`);
+            }
+          } else {
+            // Handle non-nested metrics
+            if (item.metrics && item.metrics[metric] !== undefined) {
+              formattedItem[metric] = item.metrics[metric];
+              console.log(
+                `Found ${metric} in metrics: ${formattedItem[metric]}`
+              );
+            } else if (item[metric] !== undefined) {
+              formattedItem[metric] = item[metric];
+              console.log(
+                `Found ${metric} directly in item: ${formattedItem[metric]}`
+              );
+            } else {
+              formattedItem[metric] = null;
+              console.log(`Could not find ${metric} in item`);
+            }
+          }
+        }
+      }
+
+      // Now calculate and add the LinkedIn calculated metrics
+      LINKEDIN_CALCULATED_METRICS.forEach((calculatedMetric) => {
+        if (selectedMetrics.includes(calculatedMetric.id)) {
+          try {
+            console.log(`Calculating LinkedIn ${calculatedMetric.id}`);
+            const result = calculatedMetric.calculate(formattedItem);
+            formattedItem[calculatedMetric.id] = result;
+            console.log(
+              `Calculated LinkedIn ${calculatedMetric.id} = ${result}`
+            );
+          } catch (error) {
+            console.error(
+              `Error calculating LinkedIn metric ${calculatedMetric.id}:`,
+              error
+            );
+            formattedItem[calculatedMetric.id] = null;
+          }
+        }
+      });
+
+      return formattedItem;
+    });
+  } catch (error) {
+    console.error("Error formatting LinkedIn analytics:", error);
+    console.error(error.stack);
+    return [];
+  }
 };
 
 // Special handling to ensure followers_count is properly extracted from the API response
@@ -887,11 +1024,8 @@ export const getNetworkFormatter = (networkType) => {
     case "instagram":
       return formatInstagramAnalytics;
     case "linkedin_company":
-      return (response, selectedMetrics) => {
-        const formatted = genericFormatter(response, selectedMetrics);
-        // Add any LinkedIn-specific formatting here
-        return formatted;
-      };
+    case "linkedin":
+      return formatLinkedInAnalytics;
     case "fb_page":
     case "facebook": // Handle both fb_page and facebook
       return formatFacebookAnalytics;
