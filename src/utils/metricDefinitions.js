@@ -39,24 +39,24 @@ export const FACEBOOK_CALCULATED_METRICS = [
     isCalculated: true,
     dependsOn: ["calculated_engagements", "lifetime_snapshot.followers_count"],
     calculate: (metrics) => {
+      // Get follower count - try both ways it could be stored
+      const followerCount = metrics["lifetime_snapshot.followers_count"];
+
       // Log input values for debugging
       console.log("Calculating engagement rate per follower with inputs:", {
         engagements: metrics.calculated_engagements,
-        followers: metrics["lifetime_snapshot.followers_count"],
+        followers: followerCount,
       });
 
       // Make sure the denominator is valid to avoid division by zero
-      if (
-        !metrics["lifetime_snapshot.followers_count"] ||
-        metrics["lifetime_snapshot.followers_count"] === 0
-      ) {
+      if (!followerCount || followerCount === 0) {
         console.log("No followers found, returning 0");
         return 0;
       }
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics["lifetime_snapshot.followers_count"];
+      const result = engagements / followerCount;
       console.log(`Engagement rate per follower: ${result}`);
       return result;
     },
@@ -68,11 +68,16 @@ export const FACEBOOK_CALCULATED_METRICS = [
     dependsOn: ["calculated_engagements", "impressions"],
     calculate: (metrics) => {
       // Make sure the denominator is valid to avoid division by zero
-      if (!metrics.impressions || metrics.impressions === 0) return 0;
+      if (!metrics.impressions || metrics.impressions === 0) {
+        console.log("No impressions found, returning 0");
+        return 0;
+      }
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      return engagements / metrics.impressions;
+      const result = engagements / metrics.impressions;
+      console.log(`Engagement rate per impression: ${result}`);
+      return result;
     },
   },
   {
@@ -82,12 +87,16 @@ export const FACEBOOK_CALCULATED_METRICS = [
     dependsOn: ["calculated_engagements", "impressions_unique"],
     calculate: (metrics) => {
       // Make sure the denominator is valid to avoid division by zero
-      if (!metrics.impressions_unique || metrics.impressions_unique === 0)
+      if (!metrics.impressions_unique || metrics.impressions_unique === 0) {
+        console.log("No unique impressions found, returning 0");
         return 0;
+      }
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      return engagements / metrics.impressions_unique;
+      const result = engagements / metrics.impressions_unique;
+      console.log(`Engagement rate per reach: ${result}`);
+      return result;
     },
   },
   {
@@ -97,11 +106,16 @@ export const FACEBOOK_CALCULATED_METRICS = [
     dependsOn: ["post_link_clicks", "impressions"],
     calculate: (metrics) => {
       // Make sure the denominator is valid to avoid division by zero
-      if (!metrics.impressions || metrics.impressions === 0) return 0;
+      if (!metrics.impressions || metrics.impressions === 0) {
+        console.log("No impressions found, returning 0");
+        return 0;
+      }
 
       // Simple division - make sure post_link_clicks is available
       const clicks = metrics.post_link_clicks || 0;
-      return clicks / metrics.impressions;
+      const result = clicks / metrics.impressions;
+      console.log(`Click-through rate: ${result}`);
+      return result;
     },
   },
 ];

@@ -524,14 +524,34 @@ const Analytics = ({ profiles, customerId }) => {
       }
 
       console.log(`Preparing ${data.length} rows for Excel export`);
-      console.log("Sample data row:", data[0]);
 
-      // Create a new workbook
-      const wb = XLSX.utils.book_new();
+      // Detailed logging of the first few rows for debugging
+      console.log("First data row:", JSON.stringify(data[0]));
+      console.log(
+        "Second data row (if available):",
+        data.length > 1 ? JSON.stringify(data[1]) : "N/A"
+      );
+
+      // Check if follower count is present
+      const hasFollowerCount = data.some(
+        (row) => row["lifetime_snapshot.followers_count"] !== undefined
+      );
+      console.log("Has follower count in data:", hasFollowerCount);
+
+      if (!hasFollowerCount) {
+        console.warn("No follower count found in any row!");
+      }
 
       // Process the data for Excel
-      const processedData = data.map((row) => {
+      const processedData = data.map((row, index) => {
         const formattedRow = { ...row };
+
+        // Check this row for follower count
+        if (index === 0) {
+          console.log(
+            `Row 0 follower count: ${formattedRow["lifetime_snapshot.followers_count"]}`
+          );
+        }
 
         // Format rate metrics as percentages
         Object.keys(formattedRow).forEach((key) => {
@@ -541,9 +561,11 @@ const Analytics = ({ profiles, customerId }) => {
           if (isRateMetric && typeof formattedRow[key] === "number") {
             // Format as percentage with 2 decimal places
             formattedRow[key] = formattedRow[key] * 100;
-            console.log(
-              `Formatting ${key} as percentage: ${formattedRow[key]}%`
-            );
+            if (index === 0) {
+              console.log(
+                `Formatting ${key} as percentage: ${formattedRow[key]}%`
+              );
+            }
           }
 
           // Convert any objects or arrays to strings
@@ -583,7 +605,8 @@ const Analytics = ({ profiles, customerId }) => {
         }
       }
 
-      // Add the sheet to the workbook
+      // Create a new workbook and add the sheet
+      const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Social Analytics");
 
       // Generate filename with date range

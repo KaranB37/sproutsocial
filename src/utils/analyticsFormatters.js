@@ -155,6 +155,31 @@ export const formatLinkedInAnalytics = (response, selectedMetrics) => {
   });
 };
 
+// Special handling to ensure followers_count is properly extracted from the API response
+const getFollowersCount = (item) => {
+  // Try all possible locations where follower count might be stored
+  if (
+    item.metrics &&
+    item.metrics["lifetime_snapshot.followers_count"] !== undefined
+  ) {
+    return item.metrics["lifetime_snapshot.followers_count"];
+  }
+  if (
+    item.metrics &&
+    item.metrics.lifetime_snapshot &&
+    item.metrics.lifetime_snapshot.followers_count !== undefined
+  ) {
+    return item.metrics.lifetime_snapshot.followers_count;
+  }
+  if (
+    item.lifetime_snapshot &&
+    item.lifetime_snapshot.followers_count !== undefined
+  ) {
+    return item.lifetime_snapshot.followers_count;
+  }
+  return null;
+};
+
 /**
  * Format Facebook analytics data for Excel export
  * @param {Object} response - Raw API response
@@ -164,20 +189,31 @@ export const formatLinkedInAnalytics = (response, selectedMetrics) => {
 export const formatFacebookAnalytics = (response, selectedMetrics) => {
   try {
     console.log("Facebook formatter received response type:", typeof response);
-    console.log("Response keys:", Object.keys(response));
 
     // Handle different API response formats
     let dataValues = [];
 
-    // Check if response has values array directly
-    if (response.values && Array.isArray(response.values)) {
-      dataValues = response.values;
-      console.log("Using direct values array from response");
+    // Special case for the exact format in the provided example
+    if (
+      response &&
+      response.data &&
+      response.data.data &&
+      Array.isArray(response.data.data)
+    ) {
+      dataValues = response.data.data;
+      console.log(
+        "Using the standard API response format with data.data array"
+      );
     }
-    // Check if response has data.data array (standard Sprout format)
+    // Check for standard format (data.data array) within response directly
     else if (response.data && Array.isArray(response.data.data)) {
       dataValues = response.data.data;
       console.log("Using data.data format");
+    }
+    // Check if response has values array directly
+    else if (response.values && Array.isArray(response.values)) {
+      dataValues = response.values;
+      console.log("Using direct values array from response");
     }
     // Check if response.data is an array
     else if (Array.isArray(response.data)) {
@@ -208,25 +244,40 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
       return [];
     }
 
-    // Dump the first item structure
-    console.log(
-      "Sample data item (first 500 chars):",
-      JSON.stringify(dataValues[0]).substring(0, 500) + "..."
-    );
+    // Log the first item structure to help debugging
+    if (dataValues.length > 0) {
+      const sampleItem = dataValues[0];
+      console.log(
+        "Sample data item:",
+        JSON.stringify(sampleItem).substring(0, 500) + "..."
+      );
+      console.log(
+        "Sample metrics:",
+        sampleItem.metrics
+          ? Object.keys(sampleItem.metrics)
+          : "No metrics object"
+      );
+      console.log("Sample follower count:", getFollowersCount(sampleItem));
+    }
 
     // Create a list of all metrics including dependencies
     const metricsWithDependencies = new Set(selectedMetrics);
 
-    // Add dependencies from calculated metrics
+    // Only look for dependencies if we're dealing with Facebook metrics
     selectedMetrics.forEach((metric) => {
-      // Find if this is a calculated metric and add its dependencies
+      if (!metric) return; // Skip null/undefined metrics
+
       const calculatedMetric = FACEBOOK_CALCULATED_METRICS.find(
-        (cm) => cm.id === metric
+        (m) => m.id === metric
       );
+
       if (calculatedMetric && calculatedMetric.dependsOn) {
-        calculatedMetric.dependsOn.forEach((dep) => {
-          metricsWithDependencies.add(dep);
-          console.log(`Added dependency: ${dep} for ${metric}`);
+        calculatedMetric.dependsOn.forEach((depMetric) => {
+          if (depMetric) {
+            // Make sure the dependency is valid
+            metricsWithDependencies.add(depMetric);
+            console.log(`Added dependency ${depMetric} for ${metric}`);
+          }
         });
       }
     });
@@ -238,52 +289,17 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
 
     // Create the formatted data array
     return dataValues.map((item, index) => {
-      // Determine the data structure and extract fields appropriately
-      let metricsData = {};
-      let dimensionsData = {};
-      let dateValue = "Unknown Date";
-      let profileId = "Unknown Profile";
-
-      // Try to find metrics data
-      if (item.metrics && typeof item.metrics === "object") {
-        metricsData = item.metrics;
-        console.log(`Item ${index} has metrics object`);
-      }
-
-      // Try to find dimensions data
-      if (item.dimensions && typeof item.dimensions === "object") {
-        dimensionsData = item.dimensions;
-        console.log(`Item ${index} has dimensions object`);
-
-        // Try to extract date and profile from dimensions
-        if (dimensionsData["reporting_period.by(day)"]) {
-          dateValue = dimensionsData["reporting_period.by(day)"];
-        }
-
-        if (dimensionsData.customer_profile_id) {
-          profileId = dimensionsData.customer_profile_id;
-        }
-      }
-
-      // Try to find date directly
-      if (item.end_time) {
-        dateValue = item.end_time;
-      } else if (item.date) {
-        dateValue = item.date;
-      }
-
-      // Try to find profile ID directly
-      if (item.profile_id) {
-        profileId = item.profile_id;
-      } else if (item.customer_profile_id) {
-        profileId = item.customer_profile_id;
-      }
-
-      // Initialize the formatted item with basic fields
+      // Initialize the formatted item with date and standard fields
       const formattedItem = {
-        Date: dateValue,
+        Date:
+          item.end_time ||
+          (item.dimensions && item.dimensions["reporting_period.by(day)"]) ||
+          "Unknown",
         Network: "Facebook",
-        profile_id: profileId,
+        profile_id:
+          (item.dimensions && item.dimensions.customer_profile_id) ||
+          item.profile_id ||
+          "Unknown",
       };
 
       console.log(`Processing item ${index} with date ${formattedItem.Date}`);
@@ -292,20 +308,39 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
       for (const metric of metricsWithDependencies) {
         // Skip calculated metrics for now, we'll handle them next
         if (!FACEBOOK_CALCULATED_METRICS.some((cm) => cm.id === metric)) {
+          // Special case for follower count
+          if (metric === "lifetime_snapshot.followers_count") {
+            formattedItem[metric] = getFollowersCount(item);
+            console.log(
+              `Extracted follower count for item ${index}: ${formattedItem[metric]}`
+            );
+            continue;
+          }
+
           // Handle nested metrics like lifetime_snapshot.followers_count
           if (metric.includes(".")) {
             const [parent, child] = metric.split(".");
 
-            // Try different possible locations for the metric
+            // Check in metrics object first
             if (
-              metricsData[parent] &&
-              metricsData[parent][child] !== undefined
+              item.metrics &&
+              item.metrics[parent] &&
+              item.metrics[parent][child] !== undefined
             ) {
-              formattedItem[metric] = metricsData[parent][child];
+              formattedItem[metric] = item.metrics[parent][child];
               console.log(
                 `Found ${metric} in metrics.${parent}.${child}: ${formattedItem[metric]}`
               );
-            } else if (item[parent] && item[parent][child] !== undefined) {
+            }
+            // Check if the full path is directly in metrics (as in the provided example)
+            else if (item.metrics && item.metrics[metric] !== undefined) {
+              formattedItem[metric] = item.metrics[metric];
+              console.log(
+                `Found ${metric} directly in metrics object: ${formattedItem[metric]}`
+              );
+            }
+            // Check in item object directly
+            else if (item[parent] && item[parent][child] !== undefined) {
               formattedItem[metric] = item[parent][child];
               console.log(
                 `Found ${metric} in item.${parent}.${child}: ${formattedItem[metric]}`
@@ -315,16 +350,16 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
               console.log(`Could not find ${metric} in item`);
             }
           } else {
-            // Try different possible locations for non-nested metrics
-            if (metricsData[metric] !== undefined) {
-              formattedItem[metric] = metricsData[metric];
+            // Handle non-nested metrics
+            if (item.metrics && item.metrics[metric] !== undefined) {
+              formattedItem[metric] = item.metrics[metric];
               console.log(
                 `Found ${metric} in metrics: ${formattedItem[metric]}`
               );
             } else if (item[metric] !== undefined) {
               formattedItem[metric] = item[metric];
               console.log(
-                `Found ${metric} in item directly: ${formattedItem[metric]}`
+                `Found ${metric} directly in item: ${formattedItem[metric]}`
               );
             } else {
               formattedItem[metric] = null;
@@ -352,7 +387,6 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
         }
       });
 
-      console.log(`Completed item ${index} processing`);
       return formattedItem;
     });
   } catch (error) {
