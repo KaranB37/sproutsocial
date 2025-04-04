@@ -1418,371 +1418,355 @@ const Analytics = ({ profiles, customerId }) => {
 
   return (
     <div>
-      <Button
-        variant="outline"
-        className="mb-4 bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
-        onClick={() => setShowConfigPanel(!showConfigPanel)}
-      >
-        Configure Report
-      </Button>
+      {/* Report configuration panel - Always shown */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          {/* Export Format */}
+          <div className="mb-6">
+            <Label htmlFor="export-format" className="block mb-2">
+              Export Format
+            </Label>
+            <Select value={exportFormat} onValueChange={setExportFormat}>
+              <SelectTrigger
+                id="export-format"
+                className="w-full border border-gray-300 bg-white"
+              >
+                <SelectValue placeholder="Select export format" />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPORT_FORMATS.map((format) => (
+                  <SelectItem key={format.id} value={format.id}>
+                    {format.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-      {showConfigPanel && (
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            {/* Export Format */}
-            <div className="mb-6">
-              <Label htmlFor="export-format" className="block mb-2">
-                Export Format
-              </Label>
-              <Select value={exportFormat} onValueChange={setExportFormat}>
-                <SelectTrigger
-                  id="export-format"
-                  className="w-full border border-gray-300 bg-white"
-                >
-                  <SelectValue placeholder="Select export format" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPORT_FORMATS.map((format) => (
-                    <SelectItem key={format.id} value={format.id}>
-                      {format.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Show quarter selection if quarterly export format is selected */}
-              {exportFormat === "quarterly" && (
-                <div className="mt-4">
-                  <Label className="block mb-2">Select Quarters (Max 3)</Label>
-                  {showQuarterWarning && (
-                    <p className="text-yellow-500 text-xs mb-2">
-                      Only a maximum of 3 quarters can be selected. Oldest
-                      selection was removed.
-                    </p>
-                  )}
-                  <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
-                    {getAvailableQuarters().map((quarter) => (
-                      <div
-                        key={quarter.id}
-                        className="flex items-center space-x-2"
-                      >
-                        <Checkbox
-                          id={`quarter-${quarter.id}`}
-                          checked={selectedQuarters.includes(quarter.id)}
-                          onCheckedChange={() =>
-                            handleQuarterSelection(quarter.id)
-                          }
-                        />
-                        <Label
-                          htmlFor={`quarter-${quarter.id}`}
-                          className="text-sm font-normal cursor-pointer"
-                        >
-                          {quarter.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Show year selection if yearly export format is selected */}
-              {exportFormat === "yearly" && (
-                <div className="mt-4">
-                  <Label className="block mb-2">Select Fiscal Years</Label>
-                  <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
-                    {getAvailableYears().map((year) => (
-                      <div
-                        key={year.id}
-                        className="flex items-center space-x-2"
-                      >
-                        <Checkbox
-                          id={`year-${year.id}`}
-                          checked={selectedYears.includes(year.id)}
-                          onCheckedChange={() => handleYearSelection(year.id)}
-                        />
-                        <Label
-                          htmlFor={`year-${year.id}`}
-                          className="text-sm font-normal cursor-pointer"
-                        >
-                          {year.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Date Range */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <Label htmlFor="start-date" className="block mb-2">
-                  Start Date
-                </Label>
-                <DatePicker
-                  selected={startDate}
-                  onChange={(date) => setStartDate(date)}
-                  dateFormat="MMMM d, yyyy"
-                  className="border border-gray-300 p-2 rounded-md w-full"
-                  placeholderText="Select a start date"
-                />
-              </div>
-              <div>
-                <Label htmlFor="end-date" className="block mb-2">
-                  End Date
-                </Label>
-                <DatePicker
-                  selected={endDate}
-                  onChange={(date) => setEndDate(date)}
-                  dateFormat="MMMM d, yyyy"
-                  className="border border-gray-300 p-2 rounded-md w-full"
-                  placeholderText="Select an end date"
-                />
-              </div>
-            </div>
-
-            {/* Networks Section */}
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium">Networks</h3>
-                <Button
-                  variant="outline"
-                  className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
-                  onClick={() => setShowNetworkSelector(true)}
-                >
-                  Add Network
-                </Button>
-              </div>
-
-              {showNetworkSelector && (
-                <div className="mb-4 p-4 border rounded-md bg-gray-50">
-                  <h4 className="font-medium mb-2">Select a Network</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {Object.entries(NETWORK_DISPLAY_NAMES)
-                      .filter(([key, _]) => {
-                        // Only show networks that have profiles and aren't already selected
-                        const networkHasProfiles = profiles.some(
-                          (profile) => profile.network_type === key
-                        );
-                        return (
-                          networkHasProfiles && !selectedNetworks.includes(key)
-                        );
-                      })
-                      .map(([key, value]) => (
-                        <Button
-                          key={key}
-                          variant="outline"
-                          className="justify-start bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
-                          onClick={() => handleAddNetwork(key)}
-                        >
-                          {value}
-                        </Button>
-                      ))}
-                  </div>
-                  <div className="mt-2 flex justify-end">
-                    <Button
-                      variant="ghost"
-                      className="text-gray-500"
-                      onClick={() => setShowNetworkSelector(false)}
+            {/* Show quarter selection if quarterly export format is selected */}
+            {exportFormat === "quarterly" && (
+              <div className="mt-4">
+                <Label className="block mb-2">Select Quarters (Max 3)</Label>
+                {showQuarterWarning && (
+                  <p className="text-yellow-500 text-xs mb-2">
+                    Only a maximum of 3 quarters can be selected. Oldest
+                    selection was removed.
+                  </p>
+                )}
+                <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
+                  {getAvailableQuarters().map((quarter) => (
+                    <div
+                      key={quarter.id}
+                      className="flex items-center space-x-2"
                     >
-                      Cancel
-                    </Button>
-                  </div>
+                      <Checkbox
+                        id={`quarter-${quarter.id}`}
+                        checked={selectedQuarters.includes(quarter.id)}
+                        onCheckedChange={() =>
+                          handleQuarterSelection(quarter.id)
+                        }
+                      />
+                      <Label
+                        htmlFor={`quarter-${quarter.id}`}
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        {quarter.label}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Selected Networks */}
-              <div className="space-y-4">
-                {selectedNetworks.map((networkType) => {
-                  const displayName =
-                    NETWORK_DISPLAY_NAMES[networkType] || networkType;
-                  const networkProfiles = profiles.filter(
-                    (profile) => profile.network_type === networkType
-                  );
+            {/* Show year selection if yearly export format is selected */}
+            {exportFormat === "yearly" && (
+              <div className="mt-4">
+                <Label className="block mb-2">Select Fiscal Years</Label>
+                <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
+                  {getAvailableYears().map((year) => (
+                    <div key={year.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`year-${year.id}`}
+                        checked={selectedYears.includes(year.id)}
+                        onCheckedChange={() => handleYearSelection(year.id)}
+                      />
+                      <Label
+                        htmlFor={`year-${year.id}`}
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        {year.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-                  if (networkProfiles.length === 0) return null;
+          {/* Date Range */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <Label htmlFor="start-date" className="block mb-2">
+                Start Date
+              </Label>
+              <DatePicker
+                selected={startDate}
+                onChange={(date) => setStartDate(date)}
+                dateFormat="MMMM d, yyyy"
+                className="border border-gray-300 p-2 rounded-md w-full"
+                placeholderText="Select a start date"
+              />
+            </div>
+            <div>
+              <Label htmlFor="end-date" className="block mb-2">
+                End Date
+              </Label>
+              <DatePicker
+                selected={endDate}
+                onChange={(date) => setEndDate(date)}
+                dateFormat="MMMM d, yyyy"
+                className="border border-gray-300 p-2 rounded-md w-full"
+                placeholderText="Select an end date"
+              />
+            </div>
+          </div>
 
-                  return (
-                    <div key={networkType} className="border rounded-md p-4">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-medium">{displayName}</h3>
-                        <Button
-                          variant="ghost"
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => {
-                            setSelectedNetworks(
-                              selectedNetworks.filter((n) => n !== networkType)
-                            );
-                            setSelectedProfiles(
-                              selectedProfiles.filter(
-                                (id) =>
-                                  !networkProfiles.some(
-                                    (p) => p.customer_profile_id === id
-                                  )
-                              )
-                            );
-                          }}
-                        >
-                          Remove
-                        </Button>
-                      </div>
+          {/* Networks Section */}
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">Networks</h3>
+              <Button
+                variant="outline"
+                className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
+                onClick={() => setShowNetworkSelector(true)}
+              >
+                Add Network
+              </Button>
+            </div>
 
-                      {/* Profiles for this network */}
-                      <div className="mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <Label className="block">Select Profiles</Label>
-                          <div className="relative w-1/2">
-                            <input
-                              type="text"
-                              placeholder="Search profiles..."
-                              className="w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              value={searchTerms[networkType] || ""}
-                              onChange={(e) =>
-                                handleSearchChange(networkType, e.target.value)
+            {showNetworkSelector && (
+              <div className="mb-4 p-4 border rounded-md bg-gray-50">
+                <h4 className="font-medium mb-2">Select a Network</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {Object.entries(NETWORK_DISPLAY_NAMES)
+                    .filter(([key, _]) => {
+                      // Only show networks that have profiles and aren't already selected
+                      const networkHasProfiles = profiles.some(
+                        (profile) => profile.network_type === key
+                      );
+                      return (
+                        networkHasProfiles && !selectedNetworks.includes(key)
+                      );
+                    })
+                    .map(([key, value]) => (
+                      <Button
+                        key={key}
+                        variant="outline"
+                        className="justify-start bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
+                        onClick={() => handleAddNetwork(key)}
+                      >
+                        {value}
+                      </Button>
+                    ))}
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    className="text-gray-500"
+                    onClick={() => setShowNetworkSelector(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Selected Networks */}
+            <div className="space-y-4">
+              {selectedNetworks.map((networkType) => {
+                const displayName =
+                  NETWORK_DISPLAY_NAMES[networkType] || networkType;
+                const networkProfiles = profiles.filter(
+                  (profile) => profile.network_type === networkType
+                );
+
+                if (networkProfiles.length === 0) return null;
+
+                return (
+                  <div key={networkType} className="border rounded-md p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium">{displayName}</h3>
+                      <Button
+                        variant="ghost"
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => {
+                          setSelectedNetworks(
+                            selectedNetworks.filter((n) => n !== networkType)
+                          );
+                          setSelectedProfiles(
+                            selectedProfiles.filter(
+                              (id) =>
+                                !networkProfiles.some(
+                                  (p) => p.customer_profile_id === id
+                                )
+                            )
+                          );
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+
+                    {/* Profiles for this network */}
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <Label className="block">Select Profiles</Label>
+                        <div className="relative w-1/2">
+                          <input
+                            type="text"
+                            placeholder="Search profiles..."
+                            className="w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={searchTerms[networkType] || ""}
+                            onChange={(e) =>
+                              handleSearchChange(networkType, e.target.value)
+                            }
+                          />
+                          {searchTerms[networkType] && (
+                            <button
+                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              onClick={() =>
+                                handleSearchChange(networkType, "")
                               }
-                            />
-                            {searchTerms[networkType] && (
-                              <button
-                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                onClick={() =>
-                                  handleSearchChange(networkType, "")
-                                }
-                              >
-                                ×
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
-                          {/* Select All option */}
-                          {(searchResults[networkType] || []).length > 0 && (
-                            <div className="col-span-2 border-b border-gray-200 pb-2 mb-2">
-                              <div className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`select-all-${networkType}`}
-                                  checked={
-                                    (searchResults[networkType] || []).length >
-                                      0 &&
-                                    (
-                                      searchResults[networkType] || []
-                                    ).every((profile) =>
-                                      selectedProfiles.includes(
-                                        profile.customer_profile_id
-                                      )
-                                    )
-                                  }
-                                  onCheckedChange={() =>
-                                    handleSelectAllForNetwork(networkType)
-                                  }
-                                />
-                                <Label
-                                  htmlFor={`select-all-${networkType}`}
-                                  className="font-medium cursor-pointer"
-                                >
-                                  Select All{" "}
-                                  {searchTerms[networkType] ? "Filtered" : ""}{" "}
-                                  Profiles
-                                  {searchTerms[networkType]
-                                    ? ` (${
-                                        (searchResults[networkType] || [])
-                                          .length
-                                      })`
-                                    : ""}
-                                </Label>
-                              </div>
-                            </div>
-                          )}
-
-                          {(searchResults[networkType] || []).map((profile) => (
-                            <div
-                              key={profile.customer_profile_id}
-                              className="flex items-center space-x-2"
                             >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
+                        {/* Select All option */}
+                        {(searchResults[networkType] || []).length > 0 && (
+                          <div className="col-span-2 border-b border-gray-200 pb-2 mb-2">
+                            <div className="flex items-center space-x-2">
                               <Checkbox
-                                id={`profile-${profile.customer_profile_id}`}
-                                checked={selectedProfiles.includes(
-                                  profile.customer_profile_id
-                                )}
-                                onCheckedChange={() =>
-                                  handleProfileSelection(
-                                    profile.customer_profile_id
+                                id={`select-all-${networkType}`}
+                                checked={
+                                  (searchResults[networkType] || []).length >
+                                    0 &&
+                                  (
+                                    searchResults[networkType] || []
+                                  ).every((profile) =>
+                                    selectedProfiles.includes(
+                                      profile.customer_profile_id
+                                    )
                                   )
+                                }
+                                onCheckedChange={() =>
+                                  handleSelectAllForNetwork(networkType)
                                 }
                               />
                               <Label
-                                htmlFor={`profile-${profile.customer_profile_id}`}
-                                className="text-sm font-normal cursor-pointer"
+                                htmlFor={`select-all-${networkType}`}
+                                className="font-medium cursor-pointer"
                               >
-                                {profile.name ||
-                                  profile.native_name ||
-                                  "Unnamed Profile"}
+                                Select All{" "}
+                                {searchTerms[networkType] ? "Filtered" : ""}{" "}
+                                Profiles
+                                {searchTerms[networkType]
+                                  ? ` (${
+                                      (searchResults[networkType] || []).length
+                                    })`
+                                  : ""}
                               </Label>
                             </div>
-                          ))}
-                          {searchTerms[networkType] &&
-                            (searchResults[networkType] || []).length === 0 && (
-                              <div className="col-span-2 text-center py-2 text-gray-500">
-                                No profiles found matching "
-                                {searchTerms[networkType]}"
-                              </div>
-                            )}
-                        </div>
-                      </div>
+                          </div>
+                        )}
 
-                      {/* Metrics for this network */}
-                      <div>
-                        <Label className="block mb-2">Select Metrics</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          {(() => {
-                            let metricsKey = networkType;
-                            if (
-                              networkType === "facebook" ||
-                              networkType === "fb_page"
-                            ) {
-                              metricsKey = "facebook";
-                            }
-
-                            // Get metrics for this network type
-                            const metrics = NETWORK_METRICS[metricsKey] || [];
-
-                            // Get selected metrics for this network
-                            const networkMetrics =
-                              selectedMetricsByNetwork[networkType] || [];
-
-                            return metrics.map((metric) => (
-                              <div
-                                key={`${networkType}-${metric.id}`}
-                                className="flex items-center space-x-2"
-                              >
-                                <Checkbox
-                                  id={`metric-${networkType}-${metric.id}`}
-                                  checked={networkMetrics.includes(metric.id)}
-                                  onCheckedChange={() =>
-                                    handleMetricSelection(
-                                      networkType,
-                                      metric.id
-                                    )
-                                  }
-                                />
-                                <Label
-                                  htmlFor={`metric-${networkType}-${metric.id}`}
-                                  className="text-sm font-normal cursor-pointer"
-                                >
-                                  {metric.label}
-                                </Label>
-                              </div>
-                            ));
-                          })()}
-                        </div>
+                        {(searchResults[networkType] || []).map((profile) => (
+                          <div
+                            key={profile.customer_profile_id}
+                            className="flex items-center space-x-2"
+                          >
+                            <Checkbox
+                              id={`profile-${profile.customer_profile_id}`}
+                              checked={selectedProfiles.includes(
+                                profile.customer_profile_id
+                              )}
+                              onCheckedChange={() =>
+                                handleProfileSelection(
+                                  profile.customer_profile_id
+                                )
+                              }
+                            />
+                            <Label
+                              htmlFor={`profile-${profile.customer_profile_id}`}
+                              className="text-sm font-normal cursor-pointer"
+                            >
+                              {profile.name ||
+                                profile.native_name ||
+                                "Unnamed Profile"}
+                            </Label>
+                          </div>
+                        ))}
+                        {searchTerms[networkType] &&
+                          (searchResults[networkType] || []).length === 0 && (
+                            <div className="col-span-2 text-center py-2 text-gray-500">
+                              No profiles found matching "
+                              {searchTerms[networkType]}"
+                            </div>
+                          )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {/* Metrics for this network */}
+                    <div>
+                      <Label className="block mb-2">Select Metrics</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        {(() => {
+                          let metricsKey = networkType;
+                          if (
+                            networkType === "facebook" ||
+                            networkType === "fb_page"
+                          ) {
+                            metricsKey = "facebook";
+                          }
+
+                          // Get metrics for this network type
+                          const metrics = NETWORK_METRICS[metricsKey] || [];
+
+                          // Get selected metrics for this network
+                          const networkMetrics =
+                            selectedMetricsByNetwork[networkType] || [];
+
+                          return metrics.map((metric) => (
+                            <div
+                              key={`${networkType}-${metric.id}`}
+                              className="flex items-center space-x-2"
+                            >
+                              <Checkbox
+                                id={`metric-${networkType}-${metric.id}`}
+                                checked={networkMetrics.includes(metric.id)}
+                                onCheckedChange={() =>
+                                  handleMetricSelection(networkType, metric.id)
+                                }
+                              />
+                              <Label
+                                htmlFor={`metric-${networkType}-${metric.id}`}
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                {metric.label}
+                              </Label>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Export Button */}
       <div className="flex justify-end">
