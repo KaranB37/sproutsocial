@@ -252,6 +252,9 @@ const Analytics = ({ profiles, customerId }) => {
   const [exportFormat, setExportFormat] = useState("daily");
   // Store profiles data for reference
   const [profilesMap, setProfilesMap] = useState({});
+  // Search functionality - one search term per network type
+  const [searchTerms, setSearchTerms] = useState({});
+  const [searchResults, setSearchResults] = useState({});
 
   // New state for advanced export options
   const [selectedQuarters, setSelectedQuarters] = useState([]);
@@ -268,6 +271,56 @@ const Analytics = ({ profiles, customerId }) => {
       setProfilesMap(profilesById);
     }
   }, [profiles]);
+
+  // Sort and filter profiles when search terms change
+  useEffect(() => {
+    if (selectedNetworks.length > 0) {
+      const filteredResults = {};
+
+      selectedNetworks.forEach((networkType) => {
+        // Get profiles for this network
+        const networkProfiles = profiles.filter(
+          (profile) =>
+            profile.network_type === networkType ||
+            (networkType === "facebook" &&
+              (profile.network_type === "fb_page" ||
+                profile.network_type === "facebook"))
+        );
+
+        // Sort profiles alphabetically
+        const sortedProfiles = [...networkProfiles].sort((a, b) => {
+          const nameA = (a.name || a.native_name || "").toLowerCase();
+          const nameB = (b.name || b.native_name || "").toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+
+        // Filter by search term if one exists for this network
+        const networkSearchTerm = searchTerms[networkType] || "";
+        const filteredProfiles = networkSearchTerm
+          ? sortedProfiles.filter((profile) => {
+              const profileName = (
+                profile.name ||
+                profile.native_name ||
+                ""
+              ).toLowerCase();
+              return profileName.includes(networkSearchTerm.toLowerCase());
+            })
+          : sortedProfiles;
+
+        filteredResults[networkType] = filteredProfiles;
+      });
+
+      setSearchResults(filteredResults);
+    }
+  }, [profiles, selectedNetworks, searchTerms]);
+
+  // Handle search input change for a specific network
+  const handleSearchChange = (networkType, value) => {
+    setSearchTerms((prev) => ({
+      ...prev,
+      [networkType]: value,
+    }));
+  };
 
   // Safe date formatting function
   const safeFormat = (date, formatStr) => {
@@ -1330,6 +1383,39 @@ const Analytics = ({ profiles, customerId }) => {
     }
   };
 
+  // Handle selecting all visible profiles for a network
+  const handleSelectAllForNetwork = (networkType) => {
+    const visibleProfiles = searchResults[networkType] || [];
+
+    // Check if all visible profiles are already selected
+    const allSelected = visibleProfiles.every((profile) =>
+      selectedProfiles.includes(profile.customer_profile_id)
+    );
+
+    if (allSelected) {
+      // Deselect all visible profiles
+      setSelectedProfiles((prevSelected) =>
+        prevSelected.filter(
+          (id) =>
+            !visibleProfiles.some(
+              (profile) => profile.customer_profile_id === id
+            )
+        )
+      );
+    } else {
+      // Select all visible profiles
+      const visibleProfileIds = visibleProfiles.map(
+        (profile) => profile.customer_profile_id
+      );
+      const alreadySelectedIds = selectedProfiles.filter(
+        (id) =>
+          !visibleProfiles.some((profile) => profile.customer_profile_id === id)
+      );
+
+      setSelectedProfiles([...alreadySelectedIds, ...visibleProfileIds]);
+    }
+  };
+
   return (
     <div>
       <Button
@@ -1543,9 +1629,71 @@ const Analytics = ({ profiles, customerId }) => {
 
                       {/* Profiles for this network */}
                       <div className="mb-4">
-                        <Label className="block mb-2">Select Profiles</Label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {networkProfiles.map((profile) => (
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="block">Select Profiles</Label>
+                          <div className="relative w-1/2">
+                            <input
+                              type="text"
+                              placeholder="Search profiles..."
+                              className="w-full px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={searchTerms[networkType] || ""}
+                              onChange={(e) =>
+                                handleSearchChange(networkType, e.target.value)
+                              }
+                            />
+                            {searchTerms[networkType] && (
+                              <button
+                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                onClick={() =>
+                                  handleSearchChange(networkType, "")
+                                }
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
+                          {/* Select All option */}
+                          {(searchResults[networkType] || []).length > 0 && (
+                            <div className="col-span-2 border-b border-gray-200 pb-2 mb-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`select-all-${networkType}`}
+                                  checked={
+                                    (searchResults[networkType] || []).length >
+                                      0 &&
+                                    (
+                                      searchResults[networkType] || []
+                                    ).every((profile) =>
+                                      selectedProfiles.includes(
+                                        profile.customer_profile_id
+                                      )
+                                    )
+                                  }
+                                  onCheckedChange={() =>
+                                    handleSelectAllForNetwork(networkType)
+                                  }
+                                />
+                                <Label
+                                  htmlFor={`select-all-${networkType}`}
+                                  className="font-medium cursor-pointer"
+                                >
+                                  Select All{" "}
+                                  {searchTerms[networkType] ? "Filtered" : ""}{" "}
+                                  Profiles
+                                  {searchTerms[networkType]
+                                    ? ` (${
+                                        (searchResults[networkType] || [])
+                                          .length
+                                      })`
+                                    : ""}
+                                </Label>
+                              </div>
+                            </div>
+                          )}
+
+                          {(searchResults[networkType] || []).map((profile) => (
                             <div
                               key={profile.customer_profile_id}
                               className="flex items-center space-x-2"
@@ -1571,6 +1719,13 @@ const Analytics = ({ profiles, customerId }) => {
                               </Label>
                             </div>
                           ))}
+                          {searchTerms[networkType] &&
+                            (searchResults[networkType] || []).length === 0 && (
+                              <div className="col-span-2 text-center py-2 text-gray-500">
+                                No profiles found matching "
+                                {searchTerms[networkType]}"
+                              </div>
+                            )}
                         </div>
                       </div>
 

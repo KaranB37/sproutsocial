@@ -4,12 +4,13 @@ import { useRouter } from "next/router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/loader";
-import { Users, ArrowRight, Layers } from "lucide-react";
+import { Users, ArrowRight, Layers, Search } from "lucide-react";
 
 export default function GroupSelectionPage() {
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -37,7 +38,12 @@ export default function GroupSelectionPage() {
         });
         console.log("Groups Count:", groupsResponse.data.data.length);
 
-        setGroups(groupsResponse.data.data);
+        // Sort groups alphabetically by name
+        const sortedGroups = [...groupsResponse.data.data].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+
+        setGroups(sortedGroups);
       } catch (err) {
         setError("Failed to fetch groups. Please try again.");
       } finally {
@@ -91,17 +97,11 @@ export default function GroupSelectionPage() {
     );
   }
 
-  // Log only the allowed groups
+  // Filter groups based on search term and allowed groups
   const filteredGroups = groups.filter(
-    (group) => group.name === "Schbang" || group.name === "Level SuperMind"
-  );
-
-  console.log(
-    "Filtered Groups with Details:",
-    filteredGroups.map((group) => ({
-      name: group.name,
-      id: "********", // Hide the actual ID
-    }))
+    (group) =>
+      (group.name === "Schbang" || group.name === "Level SuperMind") &&
+      group.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getRandomColor = (str) => {
@@ -150,22 +150,53 @@ export default function GroupSelectionPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Log groups before rendering */}
-          {console.log(
-            "Rendering filtered groups:",
-            filteredGroups.map((group) => ({
-              name: group.name,
-              id: "********", // Hide the actual ID
-            }))
-          )}
+        {/* Search Bar */}
+        <div className="max-w-md mx-auto mb-8">
+          <div className="relative rounded-md shadow-sm">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              className="block w-full pl-10 pr-12 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-500"
+              placeholder="Search groups..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <button
+                  className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                  onClick={() => setSearchTerm("")}
+                >
+                  <span className="sr-only">Clear search</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
-          {groups
-            .filter(
-              (group) =>
-                group.name === "Schbang" || group.name === "Level SuperMind"
-            )
-            .map((group) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredGroups.length === 0 ? (
+            <div className="col-span-full text-center py-10">
+              <p className="text-gray-500 text-lg">
+                No groups found matching "{searchTerm}"
+              </p>
+            </div>
+          ) : (
+            filteredGroups.map((group) => {
               const bgColor = getRandomColor(group.name);
               return (
                 <Card
@@ -199,7 +230,8 @@ export default function GroupSelectionPage() {
                   </CardContent>
                 </Card>
               );
-            })}
+            })
+          )}
         </div>
       </div>
     </div>
