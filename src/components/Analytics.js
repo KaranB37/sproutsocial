@@ -52,6 +52,14 @@ const REPORTING_PERIODS = [
   { id: "yearly", label: "Yearly (FY)" },
 ];
 
+// Define export format options
+const EXPORT_FORMATS = [
+  { id: "daily", label: "Daily" },
+  { id: "monthly", label: "Monthly" },
+  { id: "quarterly", label: "Quarterly (FY)" },
+  { id: "yearly", label: "Yearly (FY)" },
+];
+
 // Network display name mapping - remove the duplicate Facebook entry
 const NETWORK_DISPLAY_NAMES = {
   fb_instagram_account: "Instagram",
@@ -250,6 +258,7 @@ const Analytics = ({ profiles, customerId }) => {
   const [selectedNetworks, setSelectedNetworks] = useState([]);
   const [showNetworkSelector, setShowNetworkSelector] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [exportFormat, setExportFormat] = useState("daily");
 
   // Safe date formatting function
   const safeFormat = (date, formatStr) => {
@@ -581,6 +590,9 @@ const Analytics = ({ profiles, customerId }) => {
       // Create a new workbook
       const wb = XLSX.utils.book_new();
 
+      // Track used sheet names to prevent duplicates
+      const usedSheetNames = new Set();
+
       // Group data by profile_id
       const profilesData = {};
 
@@ -601,8 +613,64 @@ const Analytics = ({ profiles, customerId }) => {
       // Sort each profile's data by date
       Object.keys(profilesData).forEach((profileId) => {
         profilesData[profileId].rows.sort((a, b) => {
-          // Simple date string comparison, assuming ISO format or similar sortable format
-          return new Date(a.Date) - new Date(b.Date);
+          // First check if data is already aggregated with fiscal year/quarter format
+          const aDateStr = a.Date;
+          const bDateStr = b.Date;
+
+          // If date strings include FY or Q1-Q4, they're already in fiscal format
+          const isFiscalFormat =
+            (aDateStr && aDateStr.includes("FY")) ||
+            (bDateStr && bDateStr.includes("FY"));
+
+          if (isFiscalFormat) {
+            // For fiscal formats, use string comparison
+            return aDateStr.localeCompare(bDateStr);
+          }
+
+          // For month names like "January 2023"
+          const monthNames = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+          ];
+
+          // Check if both dates use month name format
+          const aMonthFormat = monthNames.some(
+            (month) => aDateStr && aDateStr.includes(month)
+          );
+          const bMonthFormat = monthNames.some(
+            (month) => bDateStr && bDateStr.includes(month)
+          );
+
+          if (aMonthFormat && bMonthFormat) {
+            // Extract year and month for comparison
+            const aYear = parseInt(aDateStr.match(/\d{4}/)?.[0] || "0");
+            const bYear = parseInt(bDateStr.match(/\d{4}/)?.[0] || "0");
+
+            if (aYear !== bYear) return aYear - bYear;
+
+            // Find month index
+            const aMonthIndex = monthNames.findIndex((month) =>
+              aDateStr.includes(month)
+            );
+            const bMonthIndex = monthNames.findIndex((month) =>
+              bDateStr.includes(month)
+            );
+
+            return aMonthIndex - bMonthIndex;
+          }
+
+          // Default: use date object comparison for regular dates
+          return new Date(aDateStr) - new Date(bDateStr);
         });
       });
 
@@ -617,9 +685,33 @@ const Analytics = ({ profiles, customerId }) => {
           : profileId;
 
         // Create a clean sheet name (remove invalid characters)
-        const sheetName = `${profileData.network} - ${profileName}`
-          .substring(0, 31)
+        // Add a unique identifier based on profile ID to prevent duplicate sheet names
+        let shortProfileId = profileId.toString().substring(0, 5);
+        let baseSheetName = `${profileData.network} - ${profileName} (${shortProfileId})`
+          .substring(0, 28) // Leave room for counter suffix
           .replace(/[\[\]\*\?\/\\\:]/g, "_");
+
+        // Ensure sheet name is unique
+        let sheetName = baseSheetName;
+        let counter = 1;
+
+        while (usedSheetNames.has(sheetName)) {
+          sheetName = `${baseSheetName}_${counter}`;
+          counter++;
+
+          if (sheetName.length > 31) {
+            // Excel has a 31 character limit for sheet names
+            // If we exceed it, trim the baseSheetName further
+            baseSheetName = baseSheetName.substring(
+              0,
+              27 - counter.toString().length
+            );
+            sheetName = `${baseSheetName}_${counter}`;
+          }
+        }
+
+        // Add this sheet name to used names
+        usedSheetNames.add(sheetName);
 
         // Process the data for Excel including adding totals
         const processedData = [];
@@ -775,13 +867,53 @@ const Analytics = ({ profiles, customerId }) => {
         }
 
         // Add the worksheet to the workbook
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        try {
+          XLSX.utils.book_append_sheet(wb, ws, sheetName);
+          console.log(`Added worksheet: ${sheetName}`);
+        } catch (sheetError) {
+          console.error(`Error adding worksheet ${sheetName}:`, sheetError);
+
+          // If this is a duplicate sheet name error, try one more approach with a timestamp
+          if (
+            sheetError.message &&
+            sheetError.message.includes("already exists")
+          ) {
+            // Use timestamp to ensure uniqueness
+            const timestamp = new Date().getTime().toString().slice(-6);
+            const fallbackName = `Sheet_${timestamp}`;
+
+            try {
+              XLSX.utils.book_append_sheet(wb, ws, fallbackName);
+              console.log(`Used fallback worksheet name: ${fallbackName}`);
+            } catch (fallbackError) {
+              console.error(`Failed to add with fallback name:`, fallbackError);
+              // Continue with the loop to process other profiles
+            }
+          }
+        }
       }
 
       // Generate filename with date range
       const startStr = safeFormat(startDate, "yyyy-MM-dd");
       const endStr = safeFormat(endDate, "yyyy-MM-dd");
-      const filename = `SproutSocial_Analytics_${startStr}_to_${endStr}.xlsx`;
+      let formatStr = "";
+
+      // Include the export format in the filename
+      switch (exportFormat) {
+        case "monthly":
+          formatStr = "_Monthly";
+          break;
+        case "quarterly":
+          formatStr = "_Quarterly";
+          break;
+        case "yearly":
+          formatStr = "_Yearly";
+          break;
+        default:
+          formatStr = "_Daily";
+      }
+
+      const filename = `SproutSocial_Analytics${formatStr}_${startStr}_to_${endStr}.xlsx`;
 
       // Export the workbook
       XLSX.writeFile(wb, filename);
@@ -827,7 +959,7 @@ const Analytics = ({ profiles, customerId }) => {
     return hasMetrics;
   };
 
-  // Update the handleExportToExcel function to use the correct formatter for Instagram
+  // Update the handleExportToExcel function to use the exportFormat state variable and the groupDataByReportingPeriod utility
   const handleExportToExcel = async () => {
     setLoading(true);
     setError(null);
@@ -938,9 +1070,34 @@ const Analytics = ({ profiles, customerId }) => {
       // After successfully formatting the data, update the state
       setAnalyticsData(formattedData);
 
+      // If export format is not daily, aggregate the data by the selected period
+      let dataToExport = formattedData;
+      if (exportFormat !== "daily") {
+        console.log(`Aggregating data by ${exportFormat} period`);
+
+        try {
+          // Use the reportingPeriodUtils to aggregate data
+          dataToExport = groupDataByReportingPeriod(
+            formattedData,
+            exportFormat,
+            new Date(startDate),
+            new Date(endDate)
+          );
+
+          console.log(
+            `Successfully aggregated data: ${dataToExport.length} rows`
+          );
+        } catch (aggregationError) {
+          console.error("Error aggregating data:", aggregationError);
+          setError(`Error aggregating data: ${aggregationError.message}`);
+          // Fallback to non-aggregated data
+          dataToExport = formattedData;
+        }
+      }
+
       // Export to Excel
       try {
-        await exportToExcel(formattedData);
+        await exportToExcel(dataToExport);
         toast.success("Excel file exported successfully!");
       } catch (exportError) {
         console.error("Error exporting to Excel:", exportError);
@@ -987,6 +1144,26 @@ const Analytics = ({ profiles, customerId }) => {
                     {REPORTING_PERIODS.map((period) => (
                       <SelectItem key={period.id} value={period.id}>
                         {period.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="export-format" className="block mb-2">
+                  Export Format
+                </Label>
+                <Select value={exportFormat} onValueChange={setExportFormat}>
+                  <SelectTrigger
+                    id="export-format"
+                    className="w-full border border-gray-300 bg-white"
+                  >
+                    <SelectValue placeholder="Select export format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EXPORT_FORMATS.map((format) => (
+                      <SelectItem key={format.id} value={format.id}>
+                        {format.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1192,7 +1369,7 @@ const Analytics = ({ profiles, customerId }) => {
 
                 {selectedNetworks.length === 0 && (
                   <div className="p-4 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-center">
-                    Click &quot; Add Network &quot; to select networks for your
+                    Click &quot;Add Network&quot; to select networks for your
                     report
                   </div>
                 )}
@@ -1210,7 +1387,14 @@ const Analytics = ({ profiles, customerId }) => {
           }
           className="bg-primary text-white py-2 px-4 rounded hover:bg-primary-dark"
         >
-          {loading ? "Exporting..." : "Export to Excel"}
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            "Export to Excel"
+          )}
         </Button>
       </div>
 
