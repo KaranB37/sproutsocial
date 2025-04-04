@@ -250,11 +250,24 @@ const Analytics = ({ profiles, customerId }) => {
   const [showNetworkSelector, setShowNetworkSelector] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
   const [exportFormat, setExportFormat] = useState("daily");
+  // Store profiles data for reference
+  const [profilesMap, setProfilesMap] = useState({});
 
   // New state for advanced export options
   const [selectedQuarters, setSelectedQuarters] = useState([]);
   const [selectedYears, setSelectedYears] = useState([]);
   const [showQuarterWarning, setShowQuarterWarning] = useState(false);
+
+  // Initialize profilesMap when profiles data is available
+  useEffect(() => {
+    if (profiles && profiles.length > 0) {
+      const profilesById = {};
+      profiles.forEach((profile) => {
+        profilesById[profile.customer_profile_id] = profile;
+      });
+      setProfilesMap(profilesById);
+    }
+  }, [profiles]);
 
   // Safe date formatting function
   const safeFormat = (date, formatStr) => {
@@ -498,17 +511,11 @@ const Analytics = ({ profiles, customerId }) => {
         ) {
           selectedMetric.dependsOn.forEach((dependency) => {
             if (!updatedNetworkMetrics.includes(dependency)) {
-              console.log(
-                `Auto-selecting dependency ${dependency} for ${metricId}`
-              );
               updatedNetworkMetrics.push(dependency);
             }
           });
         }
       }
-
-      // Log the updated metrics for debugging
-      console.log(`Updated metrics for ${networkType}:`, updatedNetworkMetrics);
 
       return {
         ...prev,
@@ -749,8 +756,6 @@ const Analytics = ({ profiles, customerId }) => {
         return;
       }
 
-      console.log(`Preparing ${data.length} rows for Excel export`);
-
       // Create a new workbook
       const wb = XLSX.utils.book_new();
 
@@ -760,13 +765,26 @@ const Analytics = ({ profiles, customerId }) => {
       // Group data by profile_id
       const profilesData = {};
 
+      // First pass - collect all profiles
       data.forEach((row) => {
         const profileId = row.profile_id || "unknown";
         const network = row.Network || "Unknown";
 
         if (!profilesData[profileId]) {
+          // Get profile information from profilesMap
+          const foundProfile =
+            profilesMap[profileId] ||
+            profiles.find(
+              (p) => p.customer_profile_id.toString() === profileId.toString()
+            );
+
+          // Store profile name and network info
           profilesData[profileId] = {
             network,
+            profileObj: foundProfile, // Store the entire profile object for later reference
+            profileName: foundProfile
+              ? foundProfile.name || foundProfile.native_name || profileId
+              : profileId,
             rows: [],
           };
         }
@@ -777,7 +795,7 @@ const Analytics = ({ profiles, customerId }) => {
       // Sort each profile's data by date
       Object.keys(profilesData).forEach((profileId) => {
         profilesData[profileId].rows.sort((a, b) => {
-          // First check if data is already aggregated with fiscal year/quarter format
+          // Sort logic remains the same
           const aDateStr = a.Date;
           const bDateStr = b.Date;
 
@@ -840,37 +858,40 @@ const Analytics = ({ profiles, customerId }) => {
 
       // For each profile, create a worksheet
       for (const [profileId, profileData] of Object.entries(profilesData)) {
-        // Find profile name from list of profiles
-        const profile = profiles.find(
-          (p) => p.customer_profile_id.toString() === profileId.toString()
-        );
-        const profileName = profile
-          ? profile.name || profile.native_name || profileId
-          : profileId;
+        // Use the profile object stored earlier
+        const profileObj = profileData.profileObj;
+        const profileName = profileData.profileName;
+        const networkType = profileData.network;
+        const networkDisplay =
+          NETWORK_DISPLAY_NAMES[networkType] || networkType;
 
-        // Create a clean sheet name (remove invalid characters)
-        // Add a unique identifier based on profile ID to prevent duplicate sheet names
-        let shortProfileId = profileId.toString().substring(0, 5);
-        let baseSheetName = `${profileData.network} - ${profileName} (${shortProfileId})`
-          .substring(0, 28) // Leave room for counter suffix
+        // Create a unique sheet name based on profile name and network with the full ID
+        // to absolutely ensure uniqueness
+        let baseSheetName = `${profileName} - ${networkDisplay}`
+          .substring(0, 20) // Leave room for ID and potential counter
           .replace(/[\[\]\*\?\/\\\:]/g, "_");
 
-        // Ensure sheet name is unique
-        let sheetName = baseSheetName;
+        // Ensure sheet name is unique by adding profile ID
+        let sheetName = `${baseSheetName} (${profileId})`;
         let counter = 1;
 
+        // Trim if exceeding Excel's 31 character limit
+        if (sheetName.length > 31) {
+          const maxLength = 31 - `(${profileId})`.length;
+          baseSheetName = baseSheetName.substring(0, maxLength);
+          sheetName = `${baseSheetName}(${profileId})`;
+        }
+
         while (usedSheetNames.has(sheetName)) {
-          sheetName = `${baseSheetName}_${counter}`;
+          // Add counter for truly exceptional cases of collision
+          sheetName = `${baseSheetName}(${profileId}_${counter})`;
           counter++;
 
+          // Ensure we stay within Excel's 31 character limit
           if (sheetName.length > 31) {
-            // Excel has a 31 character limit for sheet names
-            // If we exceed it, trim the baseSheetName further
-            baseSheetName = baseSheetName.substring(
-              0,
-              27 - counter.toString().length
-            );
-            sheetName = `${baseSheetName}_${counter}`;
+            const maxLength = 31 - `(${profileId}_${counter})`.length;
+            baseSheetName = baseSheetName.substring(0, maxLength);
+            sheetName = `${baseSheetName}(${profileId}_${counter})`;
           }
         }
 
@@ -905,29 +926,11 @@ const Analytics = ({ profiles, customerId }) => {
         profileData.rows.forEach((row, index) => {
           const formattedRow = { ...row };
 
-          // Replace profile_id with profile name and rename the column
+          // Always set the Profile Name to ensure consistency
+          formattedRow["Profile Name"] = profileName;
+
+          // Replace profile_id with profile name if it exists
           if ("profile_id" in formattedRow) {
-            // Look up the profile by ID and get the actual name
-            const rowProfileId = formattedRow.profile_id.toString();
-            const profileObj = profiles.find(
-              (p) => p.customer_profile_id.toString() === rowProfileId
-            );
-
-            if (profileObj) {
-              // Use the profile's actual name
-              formattedRow["Profile Name"] =
-                profileObj.name || profileObj.native_name;
-              console.log(
-                `Found profile name: ${formattedRow["Profile Name"]} for ID: ${rowProfileId}`
-              );
-            } else {
-              // Fallback if profile not found
-              formattedRow["Profile Name"] = profileName;
-              console.log(
-                `Using fallback name: ${profileName} for ID: ${rowProfileId}`
-              );
-            }
-
             // Remove the original profile_id property
             delete formattedRow.profile_id;
           }
@@ -1033,7 +1036,6 @@ const Analytics = ({ profiles, customerId }) => {
         // Add the worksheet to the workbook
         try {
           XLSX.utils.book_append_sheet(wb, ws, sheetName);
-          console.log(`Added worksheet: ${sheetName}`);
         } catch (sheetError) {
           console.error(`Error adding worksheet ${sheetName}:`, sheetError);
 
@@ -1048,7 +1050,6 @@ const Analytics = ({ profiles, customerId }) => {
 
             try {
               XLSX.utils.book_append_sheet(wb, ws, fallbackName);
-              console.log(`Used fallback worksheet name: ${fallbackName}`);
             } catch (fallbackError) {
               console.error(`Failed to add with fallback name:`, fallbackError);
               // Continue with the loop to process other profiles
@@ -1146,7 +1147,7 @@ const Analytics = ({ profiles, customerId }) => {
     return hasMetrics;
   };
 
-  // Update the handleExportToExcel function to use the exportFormat state variable and the groupDataByReportingPeriod utility
+  // Update the handleExportToExcel function to use the profilesMap for consistency
   const handleExportToExcel = async () => {
     setLoading(true);
     setError(null);
@@ -1164,40 +1165,6 @@ const Analytics = ({ profiles, customerId }) => {
         return;
       }
 
-      // Find which network type we're exporting data for based on selected profiles
-      let exportNetworkType = selectedNetworkType;
-      const selectedProfileObjects = profiles.filter((p) =>
-        selectedProfiles.includes(p.customer_profile_id)
-      );
-
-      if (selectedProfileObjects.length > 0) {
-        // Get network type from the first selected profile
-        const firstProfileType = selectedProfileObjects[0].network_type;
-
-        // Normalize Facebook network types
-        if (firstProfileType === "fb_page" || firstProfileType === "facebook") {
-          exportNetworkType = "facebook";
-        } else {
-          exportNetworkType = firstProfileType;
-        }
-
-        console.log(
-          "Export network type based on profiles:",
-          exportNetworkType
-        );
-      }
-
-      // Get metrics for the determined network type
-      const selectedMetrics = selectedMetricsByNetwork[exportNetworkType] || [];
-      console.log("Export network type:", exportNetworkType);
-      console.log("All selected metrics by network:", selectedMetricsByNetwork);
-      console.log("Selected metrics for export:", selectedMetrics);
-
-      if (!selectedMetrics || selectedMetrics.length === 0) {
-        setError(`Please select at least one metric for ${exportNetworkType}`);
-        return;
-      }
-
       // Validate quarter/year selection
       if (exportFormat === "quarterly" && selectedQuarters.length === 0) {
         setError("Please select at least one quarter for quarterly export");
@@ -1209,171 +1176,152 @@ const Analytics = ({ profiles, customerId }) => {
         return;
       }
 
-      // Get all required metrics including dependencies
-      const apiMetrics = getMetricsWithDependencies(
-        selectedMetrics,
-        exportNetworkType
-      );
-      console.log("API metrics with dependencies:", apiMetrics);
+      // Group profiles by network type
+      const profilesByNetwork = {};
 
-      // Continue with API call using the determined network type and metrics
-      let response;
-      try {
-        const apiParams = {
-          customerId,
-          profileId: selectedProfiles,
-          startDate: safeFormat(startDate, "yyyy-MM-dd"),
-          endDate: safeFormat(endDate, "yyyy-MM-dd"),
-          reportingPeriod: exportFormat,
-          metrics: apiMetrics,
-        };
+      // Get profiles that are selected
+      const selectedProfilesData = selectedProfiles
+        .map((id) => {
+          return (
+            profilesMap[id] ||
+            profiles.find((p) => p.customer_profile_id === id)
+          );
+        })
+        .filter(Boolean);
 
-        console.log("API request params:", apiParams);
+      // Group them by network type
+      selectedProfilesData.forEach((profile) => {
+        const networkType = profile.network_type;
+        if (!profilesByNetwork[networkType]) {
+          profilesByNetwork[networkType] = [];
+        }
+        profilesByNetwork[networkType].push(profile);
+      });
 
-        response = await getProfileAnalytics(apiParams);
-        console.log("Raw API response:", response);
-      } catch (apiError) {
-        console.error("API call failed:", apiError);
-        setError(`API request failed: ${apiError.message}`);
-        return;
-      }
+      // All formatted data that we'll collect from multiple API calls
+      const allFormattedData = [];
 
-      if (!response) {
-        setError("API returned no response");
-        return;
-      }
+      // Make separate API calls for each network type
+      for (const [networkType, networkProfiles] of Object.entries(
+        profilesByNetwork
+      )) {
+        // Normalize network type for metrics selection
+        let exportNetworkType = networkType;
+        if (networkType === "fb_page" || networkType === "facebook") {
+          exportNetworkType = "facebook";
+        }
 
-      // Format the data according to profile type using the network formatter
-      let formattedData;
-      try {
-        console.log("Formatting data for network type:", exportNetworkType);
+        // Get metrics for this network type
+        const selectedMetrics =
+          selectedMetricsByNetwork[exportNetworkType] || [];
 
-        // Get the appropriate formatter based on network type
-        const formatter = getNetworkFormatter(exportNetworkType);
-        formattedData = formatter(response, selectedMetrics);
+        if (!selectedMetrics || selectedMetrics.length === 0) {
+          console.warn(
+            `No metrics selected for ${exportNetworkType}, skipping`
+          );
+          continue;
+        }
 
-        console.log("Formatted data sample:", formattedData.slice(0, 2));
-        console.log("Total rows:", formattedData.length);
-      } catch (formatError) {
-        console.error("Error formatting data:", formatError);
-        setError(`Error formatting data: ${formatError.message}`);
-        return;
-      }
+        // Get profile IDs for this network
+        const profileIds = networkProfiles.map((p) => p.customer_profile_id);
 
-      if (!formattedData || formattedData.length === 0) {
-        setError("No data available to export after formatting");
-        return;
-      }
-
-      // After successfully formatting the data, update the state
-      setAnalyticsData(formattedData);
-
-      // If export format is not daily, aggregate the data by the selected period
-      let dataToExport = formattedData;
-      if (exportFormat === "quarterly" && selectedQuarters.length > 0) {
-        console.log(
-          `Aggregating data by selected quarters: ${selectedQuarters.join(
-            ", "
-          )}`
+        // Get required metrics with dependencies
+        const apiMetrics = getMetricsWithDependencies(
+          selectedMetrics,
+          exportNetworkType
         );
 
         try {
-          // For quarterly with specific quarters selected
-          // We'll need to filter data to only include the selected quarters
-          const aggregatedData = groupDataByReportingPeriod(
-            formattedData,
-            exportFormat,
-            new Date(startDate),
-            new Date(endDate)
-          );
-
-          // Filter to only keep selected quarters
-          dataToExport = aggregatedData.filter((row) => {
-            // Check if the row Date contains any of the selected quarter IDs
-            return selectedQuarters.some((quarter) => {
-              const quarterPattern = quarter.replace("FY", "FY\\d+-\\d+.*Q"); // e.g., "FY2023-Q1" becomes "FY\d+-\d+.*Q1"
-              const regex = new RegExp(quarterPattern);
-              return regex.test(row.Date);
-            });
-          });
+          // Make API call for this network type and its profiles
+          const apiParams = {
+            customerId,
+            profileId: profileIds,
+            startDate: safeFormat(startDate, "yyyy-MM-dd"),
+            endDate: safeFormat(endDate, "yyyy-MM-dd"),
+            reportingPeriod: exportFormat,
+            metrics: apiMetrics,
+          };
 
           console.log(
-            `Filtered to ${dataToExport.length} rows from selected quarters`
+            `Making API call for ${networkType} with ${profileIds.length} profiles`
           );
-        } catch (aggregationError) {
-          console.error("Error aggregating quarterly data:", aggregationError);
-          setError(
-            `Error aggregating quarterly data: ${aggregationError.message}`
-          );
-          // Fallback to non-aggregated data
-          dataToExport = formattedData;
-        }
-      } else if (exportFormat === "yearly" && selectedYears.length > 0) {
-        console.log(
-          `Aggregating data by selected years: ${selectedYears.join(", ")}`
-        );
+          const response = await getProfileAnalytics(apiParams);
 
-        try {
-          // For yearly with specific years selected
-          const aggregatedData = groupDataByReportingPeriod(
-            formattedData,
-            exportFormat,
-            new Date(startDate),
-            new Date(endDate)
-          );
+          if (!response) {
+            console.warn(`No response for ${networkType}, skipping`);
+            continue;
+          }
 
-          // Filter to only keep selected years
-          dataToExport = aggregatedData.filter((row) => {
-            // Check if the row Date contains any of the selected year IDs
-            return selectedYears.some((year) => {
-              const yearPattern = year.replace("FY", "FY"); // e.g., "FY2023" remains "FY2023"
-              const regex = new RegExp(yearPattern);
-              return regex.test(row.Date);
-            });
-          });
+          // Format the data with the appropriate formatter
+          const formatter = getNetworkFormatter(exportNetworkType);
+          const formattedData = formatter(response, selectedMetrics);
 
-          console.log(
-            `Filtered to ${dataToExport.length} rows from selected years`
-          );
-        } catch (aggregationError) {
-          console.error("Error aggregating yearly data:", aggregationError);
-          setError(
-            `Error aggregating yearly data: ${aggregationError.message}`
-          );
-          // Fallback to non-aggregated data
-          dataToExport = formattedData;
-        }
-      } else if (exportFormat !== "daily") {
-        console.log(`Aggregating data by ${exportFormat} period`);
+          if (formattedData && formattedData.length > 0) {
+            // Process the formatted data as needed (e.g., aggregate by period)
+            let processedData = formattedData;
 
-        try {
-          // Regular aggregation for monthly or when no specific quarters/years are selected
-          dataToExport = groupDataByReportingPeriod(
-            formattedData,
-            exportFormat,
-            new Date(startDate),
-            new Date(endDate)
-          );
+            // Apply any needed aggregation based on export format
+            if (exportFormat === "quarterly" && selectedQuarters.length > 0) {
+              const aggregatedData = groupDataByReportingPeriod(
+                formattedData,
+                exportFormat,
+                new Date(startDate),
+                new Date(endDate)
+              );
 
-          console.log(
-            `Successfully aggregated data: ${dataToExport.length} rows`
-          );
-        } catch (aggregationError) {
-          console.error("Error aggregating data:", aggregationError);
-          setError(`Error aggregating data: ${aggregationError.message}`);
-          // Fallback to non-aggregated data
-          dataToExport = formattedData;
+              // Filter to only keep selected quarters
+              processedData = aggregatedData.filter((row) => {
+                return selectedQuarters.some((quarter) => {
+                  const quarterPattern = quarter.replace(
+                    "FY",
+                    "FY\\d+-\\d+.*Q"
+                  );
+                  const regex = new RegExp(quarterPattern);
+                  return regex.test(row.Date);
+                });
+              });
+            } else if (exportFormat === "yearly" && selectedYears.length > 0) {
+              const aggregatedData = groupDataByReportingPeriod(
+                formattedData,
+                exportFormat,
+                new Date(startDate),
+                new Date(endDate)
+              );
+
+              // Filter to only keep selected years
+              processedData = aggregatedData.filter((row) => {
+                return selectedYears.some((year) => {
+                  const yearPattern = year.replace("FY", "FY");
+                  const regex = new RegExp(yearPattern);
+                  return regex.test(row.Date);
+                });
+              });
+            } else if (exportFormat !== "daily") {
+              processedData = groupDataByReportingPeriod(
+                formattedData,
+                exportFormat,
+                new Date(startDate),
+                new Date(endDate)
+              );
+            }
+
+            // Add all processed data to our collection
+            allFormattedData.push(...processedData);
+          }
+        } catch (apiError) {
+          console.error(`API call failed for ${networkType}:`, apiError);
+          // Continue with other network types instead of failing completely
         }
       }
 
-      // Export to Excel
-      try {
-        await exportToExcel(dataToExport);
-        toast.success("Excel file exported successfully!");
-      } catch (exportError) {
-        console.error("Error exporting to Excel:", exportError);
-        setError(`Error exporting to Excel: ${exportError.message}`);
+      if (allFormattedData.length === 0) {
+        setError("No data available to export after API calls");
+        return;
       }
+
+      // Export all collected data to Excel
+      await exportToExcel(allFormattedData);
+      toast.success("Excel file exported successfully!");
     } catch (error) {
       console.error("General error:", error);
       setError(`Error: ${error.message}`);
@@ -1675,55 +1623,22 @@ const Analytics = ({ profiles, customerId }) => {
                     </div>
                   );
                 })}
-
-                {selectedNetworks.length === 0 && (
-                  <div className="p-4 border border-gray-200 rounded-md bg-gray-50 text-gray-500 text-center">
-                    Click &quot;Add Network&quot; to select networks for your
-                    report
-                  </div>
-                )}
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="flex justify-end space-x-2">
+      {/* Export Button */}
+      <div className="flex justify-end">
         <Button
+          variant="outline"
+          className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
           onClick={handleExportToExcel}
-          disabled={
-            loading || selectedProfiles.length === 0 || !hasSelectedMetrics()
-          }
-          className="bg-primary text-white py-2 px-4 rounded hover:bg-primary-dark"
         >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            "Export to Excel"
-          )}
+          Export to Excel
         </Button>
       </div>
-
-      {error && (
-        <div className="p-4 mt-4 border border-red-200 bg-red-50 rounded-md text-red-800">
-          {error}
-        </div>
-      )}
-
-      {selectedProfiles.length === 0 && (
-        <div className="p-4 mt-4 border border-yellow-200 bg-yellow-50 rounded-md text-yellow-800">
-          Please select at least one profile
-        </div>
-      )}
-
-      {selectedProfiles.length > 0 && !hasSelectedMetrics() && (
-        <div className="p-4 mt-4 border border-yellow-200 bg-yellow-50 rounded-md text-yellow-800">
-          Please select at least one metric
-        </div>
-      )}
     </div>
   );
 };
