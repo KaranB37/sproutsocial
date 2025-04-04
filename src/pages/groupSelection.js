@@ -23,6 +23,20 @@ export default function GroupSelectionPage() {
         const groupsResponse = await axios.get(
           `/api/proxy/${customerId}/metadata/customer/groups`
         );
+
+        // Log sanitized groups response without group IDs
+        console.log(
+          "Groups Response: [Group data available - IDs hidden for security]"
+        );
+        console.log("Groups Data:", {
+          ...groupsResponse.data,
+          data: groupsResponse.data.data.map((group) => ({
+            name: group.name,
+            id: "********", // Hide real ID
+          })),
+        });
+        console.log("Groups Count:", groupsResponse.data.data.length);
+
         setGroups(groupsResponse.data.data);
       } catch (err) {
         setError("Failed to fetch groups. Please try again.");
@@ -35,6 +49,13 @@ export default function GroupSelectionPage() {
   }, []);
 
   const handleGroupClick = (groupId) => {
+    // Log the selected group without showing the actual ID
+    const selectedGroup = groups.find((group) => group.group_id === groupId);
+    console.log("Selected Group:", {
+      name: selectedGroup.name,
+      id: "********", // Hide the actual ID
+    });
+
     // Navigate to the index page with the selected group ID
     router.push({
       pathname: "/",
@@ -69,6 +90,19 @@ export default function GroupSelectionPage() {
       </div>
     );
   }
+
+  // Log only the allowed groups
+  const filteredGroups = groups.filter(
+    (group) => group.name === "Schbang" || group.name === "Level SuperMind"
+  );
+
+  console.log(
+    "Filtered Groups with Details:",
+    filteredGroups.map((group) => ({
+      name: group.name,
+      id: "********", // Hide the actual ID
+    }))
+  );
 
   const getRandomColor = (str) => {
     const colors = [
@@ -117,41 +151,55 @@ export default function GroupSelectionPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {groups.map((group) => {
-            const bgColor = getRandomColor(group.name);
-            return (
-              <Card
-                key={group.group_id}
-                onClick={() => handleGroupClick(group.group_id)}
-                className="cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white border border-gray-200 rounded-lg overflow-hidden"
-              >
-                <div className={`h-2 ${bgColor}`}></div>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between p-2">
-                    <div className="flex items-center">
-                      <div
-                        className={`w-12 h-12 ${bgColor} rounded-full flex items-center justify-center text-white font-bold text-lg`}
-                      >
-                        {group.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="ml-4">
-                        <h2 className="text-xl font-bold text-gray-800">
-                          {group.name}
-                        </h2>
-                      </div>
-                    </div>
-                  </div>
+          {/* Log groups before rendering */}
+          {console.log(
+            "Rendering filtered groups:",
+            filteredGroups.map((group) => ({
+              name: group.name,
+              id: "********", // Hide the actual ID
+            }))
+          )}
 
-                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
-                    <div className="flex items-center">
-                      <Layers className="h-4 w-4 mr-1 text-gray-400" />
-                      <span>View profiles</span>
+          {groups
+            .filter(
+              (group) =>
+                group.name === "Schbang" || group.name === "Level SuperMind"
+            )
+            .map((group) => {
+              const bgColor = getRandomColor(group.name);
+              return (
+                <Card
+                  key={group.group_id}
+                  onClick={() => handleGroupClick(group.group_id)}
+                  className="cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white border border-gray-200 rounded-lg overflow-hidden"
+                >
+                  <div className={`h-2 ${bgColor}`}></div>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between p-2">
+                      <div className="flex items-center">
+                        <div
+                          className={`w-12 h-12 ${bgColor} rounded-full flex items-center justify-center text-white font-bold text-lg`}
+                        >
+                          {group.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="ml-4">
+                          <h2 className="text-xl font-bold text-gray-800">
+                            {group.name}
+                          </h2>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
+                      <div className="flex items-center">
+                        <Layers className="h-4 w-4 mr-1 text-gray-400" />
+                        <span>View profiles</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
         </div>
       </div>
     </div>
