@@ -1710,8 +1710,8 @@ const Analytics = ({ profiles, customerId }) => {
                         {searchTerms[networkType] &&
                           (searchResults[networkType] || []).length === 0 && (
                             <div className="col-span-2 text-center py-2 text-gray-500">
-                              No profiles found matching "
-                              {searchTerms[networkType]}"
+                              No profiles found matching &quot;
+                              {searchTerms[networkType]}&quot;
                             </div>
                           )}
                       </div>
@@ -1774,8 +1774,16 @@ const Analytics = ({ profiles, customerId }) => {
           variant="outline"
           className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
           onClick={handleExportToExcel}
+          disabled={loading}
         >
-          Export to Excel
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            "Export to Excel"
+          )}
         </Button>
       </div>
     </div>

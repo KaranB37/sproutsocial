@@ -192,7 +192,7 @@ export default function GroupSelectionPage() {
           {filteredGroups.length === 0 ? (
             <div className="col-span-full text-center py-10">
               <p className="text-gray-500 text-lg">
-                No groups found matching "{searchTerm}"
+                No groups found matching &quot;{searchTerm}&quot;
               </p>
             </div>
           ) : (
