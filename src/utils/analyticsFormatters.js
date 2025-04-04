@@ -692,66 +692,157 @@ export const formatFacebookAnalytics = (response, selectedMetrics) => {
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatTwitterAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data.data)) {
-    console.error("Invalid response format for Twitter:", response);
+  try {
+    console.log("Twitter formatter received response type:", typeof response);
+
+    // Handle different API response formats
+    let dataValues = [];
+
+    // Check for the format in the provided example: response.data is an array
+    if (response && Array.isArray(response.data)) {
+      dataValues = response.data;
+      console.log("Using direct array from response.data");
+    }
+    // Check for standard format (data.data array) within response
+    else if (response && response.data && Array.isArray(response.data.data)) {
+      dataValues = response.data.data;
+      console.log("Using standard API response format with data.data array");
+    }
+    // Check if response has direct data.data property
+    else if (
+      response.data &&
+      response.data.data &&
+      Array.isArray(response.data.data)
+    ) {
+      dataValues = response.data.data;
+      console.log("Using nested data.data format");
+    }
+    // No recognizable format
+    else {
+      console.error("Unrecognized Twitter response format:", response);
+      return [];
+    }
+
+    console.log("Found Twitter data array with length:", dataValues.length);
+
+    if (dataValues.length === 0) {
+      console.warn("No Twitter data values found in response");
+      return [];
+    }
+
+    // Log the first item structure to help debugging
+    if (dataValues.length > 0) {
+      const sampleItem = dataValues[0];
+      console.log(
+        "Sample Twitter data item:",
+        JSON.stringify(sampleItem).substring(0, 500) + "..."
+      );
+    }
+
+    // Create the formatted data array
+    return dataValues.map((item, index) => {
+      // Initialize the formatted item with standard fields
+      const date =
+        item.dimensions && item.dimensions["reporting_period.by(day)"]
+          ? item.dimensions["reporting_period.by(day)"]
+          : item.date || item.reporting_period || "Unknown";
+
+      const profileId =
+        item.dimensions && item.dimensions.customer_profile_id
+          ? item.dimensions.customer_profile_id
+          : item.profile_id || item.customer_profile_id || "Unknown";
+
+      const formattedItem = {
+        Date: date,
+        Network: "Twitter",
+        profile_id: profileId,
+      };
+
+      console.log(
+        `Processing Twitter item ${index} with date ${formattedItem.Date}`
+      );
+
+      // Process all selected metrics
+      selectedMetrics.forEach((metricId) => {
+        // Special case for follower count
+        if (metricId === "lifetime_snapshot.followers_count") {
+          formattedItem[metricId] = getFollowersCount(item);
+          console.log(
+            `Extracted follower count for Twitter item ${index}: ${formattedItem[metricId]}`
+          );
+          return;
+        }
+
+        // Handle nested metrics like lifetime_snapshot.followers_count
+        if (metricId.includes(".")) {
+          const [parent, child] = metricId.split(".");
+
+          // Check in metrics object
+          if (
+            item.metrics &&
+            item.metrics[parent] &&
+            item.metrics[parent][child] !== undefined
+          ) {
+            formattedItem[metricId] = item.metrics[parent][child];
+            console.log(
+              `Found ${metricId} in metrics.${parent}.${child}: ${formattedItem[metricId]}`
+            );
+          }
+          // Check if the full path is directly in metrics
+          else if (item.metrics && item.metrics[metricId] !== undefined) {
+            formattedItem[metricId] = item.metrics[metricId];
+            console.log(
+              `Found ${metricId} directly in metrics object: ${formattedItem[metricId]}`
+            );
+          }
+          // Check in item object directly
+          else if (item[parent] && item[parent][child] !== undefined) {
+            formattedItem[metricId] = item[parent][child];
+            console.log(
+              `Found ${metricId} in item.${parent}.${child}: ${formattedItem[metricId]}`
+            );
+          } else {
+            formattedItem[metricId] = null;
+            console.log(`Could not find ${metricId} in Twitter item`);
+          }
+        }
+        // Handle non-nested metrics
+        else {
+          // Check if metric is in the metrics object
+          if (item.metrics && item.metrics[metricId] !== undefined) {
+            formattedItem[metricId] = item.metrics[metricId];
+            console.log(
+              `Found ${metricId} in metrics object: ${formattedItem[metricId]}`
+            );
+          }
+          // Check if metric is directly in the item
+          else if (item[metricId] !== undefined) {
+            formattedItem[metricId] = item[metricId];
+            console.log(
+              `Found ${metricId} directly in item: ${formattedItem[metricId]}`
+            );
+          } else {
+            formattedItem[metricId] = null;
+            console.log(`Could not find ${metricId} in Twitter item`);
+          }
+        }
+
+        // Convert objects to strings
+        if (
+          typeof formattedItem[metricId] === "object" &&
+          formattedItem[metricId] !== null
+        ) {
+          formattedItem[metricId] = JSON.stringify(formattedItem[metricId]);
+        }
+      });
+
+      return formattedItem;
+    });
+  } catch (error) {
+    console.error("Error formatting Twitter analytics:", error);
+    console.error(error.stack);
     return [];
   }
-
-  return response.data.data.map((item) => {
-    const { dimensions, metrics } = item;
-    const formattedRow = {
-      // Always include these dimension fields
-      Date: dimensions["reporting_period.by(day)"],
-      Network: "Twitter",
-      profile_id: dimensions["customer_profile_id"],
-    };
-
-    // Add selected metrics
-    selectedMetrics.forEach((metricId) => {
-      if (metricId.includes(".")) {
-        // Handle nested metrics like lifetime_snapshot.followers_count
-        const [parent, child] = metricId.split(".");
-        if (metrics[parent] && metrics[parent][child] !== undefined) {
-          // For complex objects, stringify them
-          if (
-            typeof metrics[parent][child] === "object" &&
-            metrics[parent][child] !== null
-          ) {
-            formattedRow[metricId] = JSON.stringify(metrics[parent][child]);
-          } else {
-            formattedRow[metricId] = metrics[parent][child];
-          }
-          console.log(
-            `Twitter: Found nested metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else if (metrics[metricId] !== undefined) {
-          // Try direct access as fallback
-          formattedRow[metricId] = metrics[metricId];
-          console.log(
-            `Twitter: Found direct metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else {
-          formattedRow[metricId] = null;
-          console.log(`Twitter: Metric not found: ${metricId}`);
-        }
-      } else if (metrics[metricId] !== undefined) {
-        // Handle regular metrics
-        formattedRow[metricId] = metrics[metricId];
-        console.log(
-          `Twitter: Found standard metric ${metricId}:`,
-          formattedRow[metricId]
-        );
-      } else {
-        formattedRow[metricId] = null; // Handle missing metrics
-        console.log(`Twitter: Metric not found: ${metricId}`);
-      }
-    });
-
-    console.log("Twitter formatted row:", formattedRow);
-    return formattedRow;
-  });
 };
 
 /**
