@@ -553,89 +553,192 @@ const Analytics = ({ profiles, customerId }) => {
 
       console.log(`Preparing ${data.length} rows for Excel export`);
 
-      // Detailed logging of the first few rows for debugging
-      console.log("First data row:", JSON.stringify(data[0]));
-      console.log(
-        "Second data row (if available):",
-        data.length > 1 ? JSON.stringify(data[1]) : "N/A"
-      );
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
 
-      // Check if follower count is present
-      const hasFollowerCount = data.some(
-        (row) => row["lifetime_snapshot.followers_count"] !== undefined
-      );
-      console.log("Has follower count in data:", hasFollowerCount);
+      // Group data by profile_id
+      const profilesData = {};
 
-      if (!hasFollowerCount) {
-        console.warn("No follower count found in any row!");
-      }
+      data.forEach((row) => {
+        const profileId = row.profile_id || "unknown";
+        const network = row.Network || "Unknown";
 
-      // Process the data for Excel
-      const processedData = data.map((row, index) => {
-        const formattedRow = { ...row };
-
-        // Check this row for follower count
-        if (index === 0) {
-          console.log(
-            `Row 0 follower count: ${formattedRow["lifetime_snapshot.followers_count"]}`
-          );
+        if (!profilesData[profileId]) {
+          profilesData[profileId] = {
+            network,
+            rows: [],
+          };
         }
 
-        // Format rate metrics as percentages
-        Object.keys(formattedRow).forEach((key) => {
-          // Check if this is a rate metric that should be formatted as percentage
-          const isRateMetric = key.includes("rate") || key.includes("Rate");
+        profilesData[profileId].rows.push(row);
+      });
 
-          if (isRateMetric && typeof formattedRow[key] === "number") {
-            // Format as percentage with 2 decimal places
-            formattedRow[key] = formattedRow[key] * 100;
-            if (index === 0) {
-              console.log(
-                `Formatting ${key} as percentage: ${formattedRow[key]}%`
-              );
-            }
+      // Sort each profile's data by date
+      Object.keys(profilesData).forEach((profileId) => {
+        profilesData[profileId].rows.sort((a, b) => {
+          // Simple date string comparison, assuming ISO format or similar sortable format
+          return new Date(a.Date) - new Date(b.Date);
+        });
+      });
+
+      // For each profile, create a worksheet
+      for (const [profileId, profileData] of Object.entries(profilesData)) {
+        // Find profile name from list of profiles
+        const profile = profiles.find(
+          (p) => p.customer_profile_id === profileId
+        );
+        const profileName = profile
+          ? profile.name || profile.native_name || profileId
+          : profileId;
+
+        // Create a clean sheet name (remove invalid characters)
+        const sheetName = `${profileData.network} - ${profileName}`
+          .substring(0, 31)
+          .replace(/[\[\]\*\?\/\\\:]/g, "_");
+
+        // Process the data for Excel including adding totals
+        const processedData = [];
+
+        // Calculate totals and find last values for each metric
+        const totals = {};
+        const lastValues = {};
+
+        // Get the first row to identify metrics
+        const firstRow = profileData.rows[0] || {};
+        const metrics = Object.keys(firstRow).filter(
+          (key) =>
+            key !== "Date" &&
+            key !== "Network" &&
+            key !== "profile_id" &&
+            key !== "Profile Name" &&
+            !key.includes("followers_count")
+        );
+
+        // Initialize totals
+        metrics.forEach((metric) => {
+          totals[metric] = 0;
+          lastValues[metric] = null;
+        });
+
+        // Process each row and calculate totals
+        profileData.rows.forEach((row, index) => {
+          const formattedRow = { ...row };
+
+          // Replace profile_id with profile name and rename the column
+          if ("profile_id" in formattedRow) {
+            // Get the proper profile name, not just the ID
+            const profileObj = profiles.find(
+              (p) => p.customer_profile_id === profileId
+            );
+            const profileDisplayName = profileObj
+              ? profileObj.name || profileObj.native_name || profileName
+              : profileName;
+
+            formattedRow["Profile Name"] = profileDisplayName;
+            delete formattedRow.profile_id;
           }
 
-          // Convert any objects or arrays to strings
-          if (
-            typeof formattedRow[key] === "object" &&
-            formattedRow[key] !== null
-          ) {
-            formattedRow[key] = JSON.stringify(formattedRow[key]);
+          // Format rate metrics as percentages
+          Object.keys(formattedRow).forEach((key) => {
+            // Check if this is a rate metric that should be formatted as percentage
+            const isRateMetric = key.includes("rate") || key.includes("Rate");
+
+            if (isRateMetric && typeof formattedRow[key] === "number") {
+              // Format as percentage with 2 decimal places
+              formattedRow[key] = formattedRow[key] * 100;
+            }
+
+            // Calculate totals for numeric values (except follower counts)
+            if (
+              typeof formattedRow[key] === "number" &&
+              !key.includes("followers_count") &&
+              key !== "Date" &&
+              key !== "Network" &&
+              key !== "Profile Name"
+            ) {
+              totals[key] = (totals[key] || 0) + formattedRow[key];
+              lastValues[key] = formattedRow[key]; // Store the last value
+            }
+
+            // Convert any objects or arrays to strings
+            if (
+              typeof formattedRow[key] === "object" &&
+              formattedRow[key] !== null
+            ) {
+              formattedRow[key] = JSON.stringify(formattedRow[key]);
+            }
+          });
+
+          processedData.push(formattedRow);
+        });
+
+        // Add a total row
+        const totalRow = {
+          Date: "TOTAL",
+          Network: profileData.network,
+          "Profile Name": profileName,
+        };
+
+        // Add a last value row
+        const lastRow = {
+          Date: "LAST VALUE",
+          Network: profileData.network,
+          "Profile Name": profileName,
+        };
+
+        // Add the totals and last values for each metric
+        metrics.forEach((metric) => {
+          totalRow[metric] = totals[metric];
+          lastRow[metric] = lastValues[metric];
+        });
+
+        // Add follower count to last row but not to total
+        const followerCountKeys = Object.keys(firstRow).filter((key) =>
+          key.includes("followers_count")
+        );
+
+        followerCountKeys.forEach((key) => {
+          const lastRowWithFollowers = [...profileData.rows]
+            .reverse()
+            .find((row) => row[key] !== undefined && row[key] !== null);
+
+          if (lastRowWithFollowers) {
+            lastRow[key] = lastRowWithFollowers[key];
+            totalRow[key] = "N/A"; // Not applicable for totals
           }
         });
 
-        return formattedRow;
-      });
+        // Add the total and last rows to the processed data
+        processedData.push(totalRow, lastRow);
 
-      // Create worksheet
-      const ws = XLSX.utils.json_to_sheet(processedData);
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(processedData);
 
-      // Add percentage formatting for rate columns
-      const range = XLSX.utils.decode_range(ws["!ref"]);
+        // Add percentage formatting for rate columns
+        const range = XLSX.utils.decode_range(ws["!ref"]);
 
-      // Check each column header to see if it's a rate
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const headerCellRef = XLSX.utils.encode_cell({ r: 0, c: C });
-        const headerCell = ws[headerCellRef];
+        // Check each column header to see if it's a rate
+        for (let C = range.s.c; C <= range.e.c; C++) {
+          const headerCellRef = XLSX.utils.encode_cell({ r: 0, c: C });
+          const headerCell = ws[headerCellRef];
 
-        if (
-          headerCell &&
-          (headerCell.v.includes("rate") || headerCell.v.includes("Rate"))
-        ) {
-          // Apply percentage format to all cells in this column
-          for (let R = 1; R <= range.e.r; R++) {
-            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-            if (ws[cellRef]) {
-              ws[cellRef].z = '0.00"%"';
+          if (
+            headerCell &&
+            (headerCell.v.includes("rate") || headerCell.v.includes("Rate"))
+          ) {
+            // Apply percentage format to all cells in this column
+            for (let R = 1; R <= range.e.r; R++) {
+              const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+              if (ws[cellRef]) {
+                ws[cellRef].z = '0.00"%"';
+              }
             }
           }
         }
-      }
 
-      // Create a new workbook and add the sheet
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Social Analytics");
+        // Add the worksheet to the workbook
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      }
 
       // Generate filename with date range
       const startStr = safeFormat(startDate, "yyyy-MM-dd");
