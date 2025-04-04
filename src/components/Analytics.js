@@ -34,9 +34,13 @@ import { toast } from "react-hot-toast";
 import {
   formatFacebookAnalytics,
   formatTwitterAnalytics,
+  formatInstagramAnalytics,
   genericFormatter,
 } from "@/utils/analyticsFormatters";
-import { FACEBOOK_CALCULATED_METRICS } from "@/utils/metricDefinitions";
+import {
+  FACEBOOK_CALCULATED_METRICS,
+  INSTAGRAM_CALCULATED_METRICS,
+} from "@/utils/metricDefinitions";
 
 // Define reporting period options
 const REPORTING_PERIODS = [
@@ -137,7 +141,6 @@ const NETWORK_METRICS = {
     },
     { id: "video_views_partial_repeat", label: "Replayed Partial Video Views" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
-    // New calculated metrics - include them from the shared module
     ...FACEBOOK_CALCULATED_METRICS,
   ],
   fb_instagram_account: [
@@ -157,6 +160,7 @@ const NETWORK_METRICS = {
     { id: "shares_count", label: "Shares" },
     { id: "story_replies", label: "Story Replies" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
+    ...INSTAGRAM_CALCULATED_METRICS,
   ],
   linkedin_company: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
@@ -233,46 +237,15 @@ const Analytics = ({ profiles, customerId }) => {
   const [reportingPeriod, setReportingPeriod] = useState("daily");
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-  const [selectedNetworkType, setSelectedNetworkType] = useState("facebook");
+  const [selectedNetworkType, setSelectedNetworkType] = useState("");
   const [selectedProfiles, setSelectedProfiles] = useState([]);
-  const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({
-    facebook: [],
-  });
+  const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showConfigPanel, setShowConfigPanel] = useState(true);
-  const [selectedNetworks, setSelectedNetworks] = useState(["facebook"]);
+  const [selectedNetworks, setSelectedNetworks] = useState([]);
   const [showNetworkSelector, setShowNetworkSelector] = useState(false);
   const [analyticsData, setAnalyticsData] = useState(null);
-
-  // Add a useEffect to initialize the network type if there are profiles
-  useEffect(() => {
-    if (profiles && profiles.length > 0) {
-      // Get the first available network type
-      const networkTypes = new Set(profiles.map((p) => p.network_type));
-      if (networkTypes.size > 0) {
-        const firstNetworkType = Array.from(networkTypes)[0];
-        console.log("Setting initial network type to:", firstNetworkType);
-
-        // If we see fb_page or facebook, use 'facebook' as the type
-        const normalizedType =
-          firstNetworkType === "fb_page" ? "facebook" : firstNetworkType;
-
-        setSelectedNetworkType(normalizedType);
-
-        // Initialize the selectedNetworks array as well
-        if (!selectedNetworks.includes(normalizedType)) {
-          setSelectedNetworks([normalizedType]);
-        }
-
-        // Initialize the selectedMetricsByNetwork with an empty array for this network
-        setSelectedMetricsByNetwork((prev) => ({
-          ...prev,
-          [normalizedType]: prev[normalizedType] || [],
-        }));
-      }
-    }
-  }, [profiles]);
 
   // Safe date formatting function
   const safeFormat = (date, formatStr) => {
@@ -411,28 +384,15 @@ const Analytics = ({ profiles, customerId }) => {
 
       let response;
 
-      if (
-        selectedNetworkType === "facebook" ||
-        selectedNetworkType === "fb_instagram_account"
-      ) {
-        response = await getProfileAnalytics({
-          customerId,
-          profileId: selectedProfiles,
-          startDate: safeFormat(startDate, "yyyy-MM-dd"),
-          endDate: safeFormat(endDate, "yyyy-MM-dd"),
-          reportingPeriod: reportingPeriod,
-          metrics: apiMetrics,
-        });
-      } else {
-        response = await getProfileAnalytics({
-          customerId,
-          profileId: selectedProfiles,
-          startDate: safeFormat(startDate, "yyyy-MM-dd"),
-          endDate: safeFormat(endDate, "yyyy-MM-dd"),
-          reportingPeriod: reportingPeriod,
-          metrics: apiMetrics,
-        });
-      }
+      // Make API call
+      response = await getProfileAnalytics({
+        customerId,
+        profileId: selectedProfiles,
+        startDate: safeFormat(startDate, "yyyy-MM-dd"),
+        endDate: safeFormat(endDate, "yyyy-MM-dd"),
+        reportingPeriod: reportingPeriod,
+        metrics: apiMetrics,
+      });
 
       console.log("Raw API response:", response);
 
@@ -448,9 +408,21 @@ const Analytics = ({ profiles, customerId }) => {
         // For Excel, format the data according to profile type
         let formattedData;
 
-        if (selectedNetworkType === "facebook") {
+        if (
+          selectedNetworkType === "facebook" ||
+          selectedNetworkType === "fb_page"
+        ) {
           // Pass both selected metrics and API metrics to ensure all dependencies are available
           formattedData = formatFacebookAnalytics(
+            response.data,
+            selectedMetrics
+          );
+        } else if (
+          selectedNetworkType === "fb_instagram_account" ||
+          selectedNetworkType === "instagram"
+        ) {
+          // Use Instagram formatter for Instagram profiles
+          formattedData = formatInstagramAnalytics(
             response.data,
             selectedMetrics
           );
@@ -501,6 +473,32 @@ const Analytics = ({ profiles, customerId }) => {
               // Make sure the dependency is valid
               metricsWithDependencies.add(depMetric);
               console.log(`Added dependency ${depMetric} for ${metricId}`);
+            }
+          });
+        }
+      });
+    }
+    // Handle Instagram metrics
+    else if (
+      networkType === "fb_instagram_account" ||
+      networkType === "instagram"
+    ) {
+      // Find dependencies for selected metrics from the INSTAGRAM_CALCULATED_METRICS
+      selectedMetrics.forEach((metricId) => {
+        if (!metricId) return; // Skip null/undefined metrics
+
+        const calculatedMetric = INSTAGRAM_CALCULATED_METRICS.find(
+          (m) => m.id === metricId
+        );
+
+        if (calculatedMetric && calculatedMetric.dependsOn) {
+          calculatedMetric.dependsOn.forEach((depMetric) => {
+            if (depMetric) {
+              // Make sure the dependency is valid
+              metricsWithDependencies.add(depMetric);
+              console.log(
+                `Added Instagram dependency ${depMetric} for ${metricId}`
+              );
             }
           });
         }
@@ -658,7 +656,7 @@ const Analytics = ({ profiles, customerId }) => {
     return hasMetrics;
   };
 
-  // Update the handleExportToExcel function to use exportNetworkType
+  // Update the handleExportToExcel function to use the correct formatter for Instagram
   const handleExportToExcel = async () => {
     setLoading(true);
     setError(null);
@@ -754,6 +752,11 @@ const Analytics = ({ profiles, customerId }) => {
           exportNetworkType === "fb_page"
         ) {
           formattedData = formatFacebookAnalytics(response, selectedMetrics);
+        } else if (
+          exportNetworkType === "fb_instagram_account" ||
+          exportNetworkType === "instagram"
+        ) {
+          formattedData = formatInstagramAnalytics(response, selectedMetrics);
         } else if (exportNetworkType === "twitter") {
           formattedData = formatTwitterAnalytics(response, selectedMetrics);
         } else {

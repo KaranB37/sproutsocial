@@ -1,4 +1,5 @@
 import { FACEBOOK_CALCULATED_METRICS } from "@/utils/metricDefinitions";
+import { INSTAGRAM_CALCULATED_METRICS } from "@/utils/metricDefinitions";
 
 /**
  * Format Instagram analytics data for Excel export
@@ -7,68 +8,219 @@ import { FACEBOOK_CALCULATED_METRICS } from "@/utils/metricDefinitions";
  * @returns {Array} Formatted data ready for Excel export
  */
 export const formatInstagramAnalytics = (response, selectedMetrics) => {
-  if (!response || !response.data || !Array.isArray(response.data.data)) {
-    console.error("Invalid response format for Instagram:", response);
-    return [];
-  }
+  try {
+    console.log("Instagram formatter received response type:", typeof response);
 
-  return response.data.data.map((item) => {
-    const { dimensions, metrics } = item;
-    const formattedRow = {
-      // Always include these dimension fields
-      Date: dimensions["reporting_period.by(day)"],
-      Network: "Instagram",
-      profile_id: dimensions["customer_profile_id"],
-    };
+    // Handle different API response formats
+    let dataValues = [];
 
-    // Add selected metrics
-    selectedMetrics.forEach((metricId) => {
-      if (metricId.includes(".")) {
-        // Handle nested metrics like lifetime_snapshot.followers_count
-        const [parent, child] = metricId.split(".");
-        if (metrics[parent] && metrics[parent][child] !== undefined) {
-          // For complex objects like followers_by_country, stringify them
-          if (
-            typeof metrics[parent][child] === "object" &&
-            metrics[parent][child] !== null
-          ) {
-            formattedRow[metricId] = JSON.stringify(metrics[parent][child]);
-          } else {
-            formattedRow[metricId] = metrics[parent][child];
-          }
-          console.log(
-            `Instagram: Found nested metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else if (metrics[metricId] !== undefined) {
-          // Try direct access as fallback
-          formattedRow[metricId] = metrics[metricId];
-          console.log(
-            `Instagram: Found direct metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else {
-          formattedRow[metricId] = null;
-          console.log(`Instagram: Metric not found: ${metricId}`);
-        }
+    // Special case for the exact format in the provided example
+    if (
+      response &&
+      response.data &&
+      response.data.data &&
+      Array.isArray(response.data.data)
+    ) {
+      dataValues = response.data.data;
+      console.log(
+        "Using the standard API response format with data.data array"
+      );
+    }
+    // Check for standard format (data.data array) within response directly
+    else if (response.data && Array.isArray(response.data.data)) {
+      dataValues = response.data.data;
+      console.log("Using data.data format");
+    }
+    // Check if response has values array directly
+    else if (response.values && Array.isArray(response.values)) {
+      dataValues = response.values;
+      console.log("Using direct values array from response");
+    }
+    // Check if response.data is an array
+    else if (Array.isArray(response.data)) {
+      dataValues = response.data;
+      console.log("Using response.data array");
+    }
+    // Single object response
+    else if (typeof response === "object" && response !== null) {
+      // Try to extract any data we can find
+      if (response.data && typeof response.data === "object") {
+        dataValues = [response.data];
+        console.log("Using single object response.data");
       } else {
-        // Handle regular metrics
-        formattedRow[metricId] =
-          metrics[metricId] !== undefined ? metrics[metricId] : null;
-        if (metrics[metricId] !== undefined) {
-          console.log(
-            `Instagram: Found standard metric ${metricId}:`,
-            formattedRow[metricId]
-          );
-        } else {
-          console.log(`Instagram: Metric not found: ${metricId}`);
-        }
+        dataValues = [response];
+        console.log("Using entire response as single data item");
+      }
+    }
+    // No recognizable format
+    else {
+      console.error("Unrecognized response format:", response);
+      return [];
+    }
+
+    console.log("Found dataValues array with length:", dataValues.length);
+
+    if (dataValues.length === 0) {
+      console.warn("No data values found in response");
+      return [];
+    }
+
+    // Log the first item structure to help debugging
+    if (dataValues.length > 0) {
+      const sampleItem = dataValues[0];
+      console.log(
+        "Sample data item:",
+        JSON.stringify(sampleItem).substring(0, 500) + "..."
+      );
+      console.log(
+        "Sample metrics:",
+        sampleItem.metrics
+          ? Object.keys(sampleItem.metrics)
+          : "No metrics object"
+      );
+      console.log("Sample follower count:", getFollowersCount(sampleItem));
+    }
+
+    // Create a list of all metrics including dependencies
+    const metricsWithDependencies = new Set(selectedMetrics);
+
+    // Add dependencies for Instagram calculated metrics
+    selectedMetrics.forEach((metric) => {
+      if (!metric) return; // Skip null/undefined metrics
+
+      const calculatedMetric = INSTAGRAM_CALCULATED_METRICS.find(
+        (m) => m.id === metric
+      );
+
+      if (calculatedMetric && calculatedMetric.dependsOn) {
+        calculatedMetric.dependsOn.forEach((depMetric) => {
+          if (depMetric) {
+            // Make sure the dependency is valid
+            metricsWithDependencies.add(depMetric);
+            console.log(
+              `Added Instagram dependency ${depMetric} for ${metric}`
+            );
+          }
+        });
       }
     });
 
-    console.log("Instagram formatted row:", formattedRow);
-    return formattedRow;
-  });
+    console.log(
+      "Final Instagram metrics with dependencies:",
+      Array.from(metricsWithDependencies)
+    );
+
+    // Create the formatted data array
+    return dataValues.map((item, index) => {
+      // Initialize the formatted item with date and standard fields
+      const formattedItem = {
+        Date:
+          item.end_time ||
+          (item.dimensions && item.dimensions["reporting_period.by(day)"]) ||
+          "Unknown",
+        Network: "Instagram",
+        profile_id:
+          (item.dimensions && item.dimensions.customer_profile_id) ||
+          item.profile_id ||
+          "Unknown",
+      };
+
+      console.log(
+        `Processing Instagram item ${index} with date ${formattedItem.Date}`
+      );
+
+      // First, add all base metrics from the API response
+      for (const metric of metricsWithDependencies) {
+        // Skip calculated metrics for now, we'll handle them next
+        if (!INSTAGRAM_CALCULATED_METRICS.some((cm) => cm.id === metric)) {
+          // Special case for follower count
+          if (metric === "lifetime_snapshot.followers_count") {
+            formattedItem[metric] = getFollowersCount(item);
+            console.log(
+              `Extracted follower count for Instagram item ${index}: ${formattedItem[metric]}`
+            );
+            continue;
+          }
+
+          // Handle nested metrics like lifetime_snapshot.followers_count
+          if (metric.includes(".")) {
+            const [parent, child] = metric.split(".");
+
+            // Check in metrics object first
+            if (
+              item.metrics &&
+              item.metrics[parent] &&
+              item.metrics[parent][child] !== undefined
+            ) {
+              formattedItem[metric] = item.metrics[parent][child];
+              console.log(
+                `Found ${metric} in metrics.${parent}.${child}: ${formattedItem[metric]}`
+              );
+            }
+            // Check if the full path is directly in metrics
+            else if (item.metrics && item.metrics[metric] !== undefined) {
+              formattedItem[metric] = item.metrics[metric];
+              console.log(
+                `Found ${metric} directly in metrics object: ${formattedItem[metric]}`
+              );
+            }
+            // Check in item object directly
+            else if (item[parent] && item[parent][child] !== undefined) {
+              formattedItem[metric] = item[parent][child];
+              console.log(
+                `Found ${metric} in item.${parent}.${child}: ${formattedItem[metric]}`
+              );
+            } else {
+              formattedItem[metric] = null;
+              console.log(`Could not find ${metric} in item`);
+            }
+          } else {
+            // Handle non-nested metrics
+            if (item.metrics && item.metrics[metric] !== undefined) {
+              formattedItem[metric] = item.metrics[metric];
+              console.log(
+                `Found ${metric} in metrics: ${formattedItem[metric]}`
+              );
+            } else if (item[metric] !== undefined) {
+              formattedItem[metric] = item[metric];
+              console.log(
+                `Found ${metric} directly in item: ${formattedItem[metric]}`
+              );
+            } else {
+              formattedItem[metric] = null;
+              console.log(`Could not find ${metric} in item`);
+            }
+          }
+        }
+      }
+
+      // Now calculate and add the Instagram calculated metrics
+      INSTAGRAM_CALCULATED_METRICS.forEach((calculatedMetric) => {
+        if (selectedMetrics.includes(calculatedMetric.id)) {
+          try {
+            console.log(`Calculating Instagram ${calculatedMetric.id}`);
+            const result = calculatedMetric.calculate(formattedItem);
+            formattedItem[calculatedMetric.id] = result;
+            console.log(
+              `Calculated Instagram ${calculatedMetric.id} = ${result}`
+            );
+          } catch (error) {
+            console.error(
+              `Error calculating Instagram metric ${calculatedMetric.id}:`,
+              error
+            );
+            formattedItem[calculatedMetric.id] = null;
+          }
+        }
+      });
+
+      return formattedItem;
+    });
+  } catch (error) {
+    console.error("Error formatting Instagram analytics:", error);
+    console.error(error.stack);
+    return [];
+  }
 };
 
 /**
@@ -732,11 +884,8 @@ export const getNetworkFormatter = (networkType) => {
   // Use specific formatters for certain networks, or fall back to generic
   switch (networkType) {
     case "fb_instagram_account":
-      return (response, selectedMetrics) => {
-        const formatted = genericFormatter(response, selectedMetrics);
-        // Add any Instagram-specific formatting here
-        return formatted;
-      };
+    case "instagram":
+      return formatInstagramAnalytics;
     case "linkedin_company":
       return (response, selectedMetrics) => {
         const formatted = genericFormatter(response, selectedMetrics);
@@ -745,11 +894,7 @@ export const getNetworkFormatter = (networkType) => {
       };
     case "fb_page":
     case "facebook": // Handle both fb_page and facebook
-      return (response, selectedMetrics) => {
-        const formatted = genericFormatter(response, selectedMetrics);
-        // Add any Facebook-specific formatting here
-        return formatted;
-      };
+      return formatFacebookAnalytics;
     case "youtube":
       return (response, selectedMetrics) => {
         const formatted = genericFormatter(response, selectedMetrics);
@@ -757,11 +902,7 @@ export const getNetworkFormatter = (networkType) => {
         return formatted;
       };
     case "twitter":
-      return (response, selectedMetrics) => {
-        const formatted = genericFormatter(response, selectedMetrics);
-        // Add any Twitter-specific formatting here
-        return formatted;
-      };
+      return formatTwitterAnalytics;
     case "threads":
       return (response, selectedMetrics) => {
         const formatted = genericFormatter(response, selectedMetrics);
