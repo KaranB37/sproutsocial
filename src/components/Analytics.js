@@ -261,6 +261,7 @@ const Analytics = ({ profiles, customerId }) => {
   const [selectedMetricsByNetwork, setSelectedMetricsByNetwork] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [warningMessage, setWarningMessage] = useState(null);
   const [showConfigPanel, setShowConfigPanel] = useState(true);
   const [selectedNetworks, setSelectedNetworks] = useState([]);
   const [showNetworkSelector, setShowNetworkSelector] = useState(false);
@@ -1123,6 +1124,7 @@ const Analytics = ({ profiles, customerId }) => {
   // Handle date change with validation
   const handleStartDateChange = (date) => {
     setStartDate(date);
+    setWarningMessage(null);
 
     // If end date is before start date, update end date
     if (endDate && date > endDate) {
@@ -1135,7 +1137,8 @@ const Analytics = ({ profiles, customerId }) => {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays > 365) {
-        toast.error(
+        console.log("Date range exceeds one year. End date will be adjusted.");
+        setWarningMessage(
           "Date range cannot exceed one year. End date will be adjusted."
         );
         // Set end date to one year after start date
@@ -1148,6 +1151,7 @@ const Analytics = ({ profiles, customerId }) => {
 
   const handleEndDateChange = (date) => {
     setEndDate(date);
+    setWarningMessage(null);
 
     // If start date is after end date, update start date
     if (startDate && date < startDate) {
@@ -1160,7 +1164,10 @@ const Analytics = ({ profiles, customerId }) => {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays > 365) {
-        toast.error(
+        console.log(
+          "Date range exceeds one year. Start date will be adjusted."
+        );
+        setWarningMessage(
           "Date range cannot exceed one year. Start date will be adjusted."
         );
         // Set start date to one year before end date
@@ -1210,13 +1217,58 @@ const Analytics = ({ profiles, customerId }) => {
     return years;
   };
 
+  // Validate date range
+  const validateDateRange = () => {
+    if (!startDate || !endDate) {
+      const message = "Please select both start and end dates";
+      console.log(message);
+      toast.error(message);
+      setError(message);
+      return false;
+    }
+
+    if (startDate.getTime() === endDate.getTime()) {
+      const message = "Start and end dates cannot be the same";
+      console.log(message);
+      toast.error(message);
+      setError(message);
+      return false;
+    }
+
+    // Calculate the difference in days
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 365) {
+      const message =
+        "Date range cannot exceed one year. Please select a shorter period.";
+      console.log(message);
+      toast.error(message);
+      setError(message);
+      return false;
+    }
+
+    return true;
+  };
+
   // Update the handleExportToExcel function to include validation
   const handleExportToExcel = async () => {
     setLoading(true);
     setError(null);
+    setWarningMessage(null);
     setAnalyticsData(null); // Clear previous data
 
     try {
+      // Check if any networks are selected
+      if (selectedNetworks.length === 0) {
+        const message = "Please select at least one network";
+        console.log(message);
+        toast.error(message);
+        setError(message);
+        setLoading(false);
+        return;
+      }
+
       // Validate date range
       if (!validateDateRange()) {
         setLoading(false);
@@ -1225,7 +1277,10 @@ const Analytics = ({ profiles, customerId }) => {
 
       // Validate inputs
       if (selectedProfiles.length === 0) {
-        toast.error("Please select at least one profile");
+        const message = "Please select at least one profile";
+        console.log(message);
+        toast.error(message);
+        setError(message);
         setLoading(false);
         return;
       }
@@ -1236,7 +1291,10 @@ const Analytics = ({ profiles, customerId }) => {
       );
 
       if (!hasSelectedMetrics) {
-        toast.error("Please select at least one metric for export");
+        const message = "Please select at least one metric for export";
+        console.log(message);
+        toast.error(message);
+        setError(message);
         setLoading(false);
         return;
       }
@@ -1293,8 +1351,14 @@ const Analytics = ({ profiles, customerId }) => {
           const response = await getProfileAnalytics(apiParams);
 
           if (!response) {
-            console.warn(`No response for ${networkType}, skipping`);
+            const message = `No response for ${networkType}, skipping`;
+            console.warn(message);
             toast.error(
+              `No data available for ${
+                NETWORK_DISPLAY_NAMES[networkType] || networkType
+              }`
+            );
+            setWarningMessage(
               `No data available for ${
                 NETWORK_DISPLAY_NAMES[networkType] || networkType
               }`
@@ -1302,12 +1366,14 @@ const Analytics = ({ profiles, customerId }) => {
             continue;
           }
 
-          if (!response.data || response.data.length === 0) {
-            toast.error(
-              `No data available for the selected date range for ${
-                NETWORK_DISPLAY_NAMES[networkType] || networkType
-              }`
-            );
+          // Check if response has data
+          if (!response.data) {
+            const message = `No data in response for ${
+              NETWORK_DISPLAY_NAMES[networkType] || networkType
+            }`;
+            console.log(message);
+            toast.error(message);
+            setWarningMessage(message);
             continue;
           }
 
@@ -1331,38 +1397,48 @@ const Analytics = ({ profiles, customerId }) => {
 
             allFormattedData.push(...processedData);
           } else {
-            toast.error(
-              `No formatted data available for ${
-                NETWORK_DISPLAY_NAMES[networkType] || networkType
-              }`
-            );
+            const message = `No formatted data available for ${
+              NETWORK_DISPLAY_NAMES[networkType] || networkType
+            }`;
+            console.log(message);
+            toast.error(message);
+            setWarningMessage(message);
           }
         } catch (error) {
+          const message = `Error processing data for ${
+            NETWORK_DISPLAY_NAMES[networkType] || networkType
+          }: ${error.message}`;
           console.error(`Error processing ${networkType}:`, error);
-          toast.error(
-            `Error processing data for ${
-              NETWORK_DISPLAY_NAMES[networkType] || networkType
-            }: ${error.message}`
-          );
+          console.log(message);
+          toast.error(message);
+          setWarningMessage(message);
           // Continue with other networks even if one fails
         }
       }
 
       // Check if we have any data to export
       if (allFormattedData.length === 0) {
-        toast.error(
-          "No data available to export. Please check your selections and try again."
-        );
+        const message =
+          "No data available to export. Please check your selections and try again.";
+        console.log(message);
+        toast.error(message);
+        setError(message);
         setLoading(false);
         return;
       }
 
       // Export the collected data
       await exportToExcel(allFormattedData);
-      toast.success("Data exported successfully!");
+      const successMessage = "Data exported successfully!";
+      console.log(successMessage);
+      toast.success(successMessage);
+      setWarningMessage(successMessage);
     } catch (error) {
+      const message = `Error exporting data: ${error.message}`;
       console.error("Error in handleExportToExcel:", error);
-      toast.error(`Error exporting data: ${error.message}`);
+      console.log(message);
+      toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -1418,32 +1494,6 @@ const Analytics = ({ profiles, customerId }) => {
    */
   const handleGoToYoutubePostMetrics = () => {
     window.location.href = YOUTUBE_POST_METRICS_PATH;
-  };
-
-  // Validate date range
-  const validateDateRange = () => {
-    if (!startDate || !endDate) {
-      toast.error("Please select both start and end dates");
-      return false;
-    }
-
-    if (startDate.getTime() === endDate.getTime()) {
-      toast.error("Start and end dates cannot be the same");
-      return false;
-    }
-
-    // Calculate the difference in days
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays > 365) {
-      toast.error(
-        "Date range cannot exceed one year. Please select a shorter period."
-      );
-      return false;
-    }
-
-    return true;
   };
 
   return (
@@ -1784,7 +1834,17 @@ const Analytics = ({ profiles, customerId }) => {
       </Card>
 
       {/* Export Button */}
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end">
+        {error && (
+          <div className="mb-2 p-2 bg-red-100 text-red-700 rounded-md w-full">
+            {error}
+          </div>
+        )}
+        {warningMessage && !error && (
+          <div className="mb-2 p-2 bg-yellow-100 text-yellow-700 rounded-md w-full">
+            {warningMessage}
+          </div>
+        )}
         <Button
           variant="outline"
           className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
