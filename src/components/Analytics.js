@@ -271,11 +271,8 @@ const Analytics = ({ profiles, customerId }) => {
   // Search functionality - one search term per network type
   const [searchTerms, setSearchTerms] = useState({});
   const [searchResults, setSearchResults] = useState({});
-
-  // New state for advanced export options
-  const [selectedQuarters, setSelectedQuarters] = useState([]);
-  const [selectedYears, setSelectedYears] = useState([]);
-  const [showQuarterWarning, setShowQuarterWarning] = useState(false);
+  // Add state for selected year
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Add state for YouTube metrics modal
   const [showYoutubeMetricsModal, setShowYoutubeMetricsModal] = useState(false);
@@ -345,179 +342,18 @@ const Analytics = ({ profiles, customerId }) => {
   const safeFormat = (date, formatStr) => {
     if (!date || !isValid(date)) return "";
     try {
+      // For API calls, ensure we're using the correct format
+      if (formatStr === "yyyy-MM-dd") {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
       return format(date, formatStr);
     } catch (e) {
       console.error("Date formatting error:", e);
       return "";
     }
-  };
-
-  // Generate available quarters for selection
-  const getAvailableQuarters = () => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    // Determine current quarter (0-3 based)
-    const currentQuarter = Math.floor(currentMonth / 3);
-
-    // Get fiscal year quarters
-    // Q1: April-June (fiscal year starts in April)
-    // Q2: July-September
-    // Q3: October-December
-    // Q4: January-March (belongs to the previous fiscal year)
-
-    const quarters = [];
-
-    // Current fiscal year
-    const fiscalYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-
-    // Add quarters for current fiscal year
-    for (let q = 0; q < 4; q++) {
-      const quarterLabel = getQuarterLabel(q, fiscalYear);
-
-      // For Q4 (Jan-Mar), check if we've already passed it this calendar year
-      if (q === 3 && currentMonth > 2) {
-        quarters.push({
-          id: `FY${fiscalYear}-Q4`,
-          label: quarterLabel,
-          fiscalYear: fiscalYear,
-        });
-      }
-      // For current quarter, mark as "Till Date"
-      else if (
-        (q === 0 && currentMonth >= 3 && currentMonth < 6) ||
-        (q === 1 && currentMonth >= 6 && currentMonth < 9) ||
-        (q === 2 && currentMonth >= 9)
-      ) {
-        quarters.push({
-          id: `FY${fiscalYear}-Q${q + 1}`,
-          label: `${quarterLabel} (Till Date)`,
-          fiscalYear: fiscalYear,
-          current: true,
-        });
-      }
-      // For past quarters in current fiscal year
-      else if (
-        (q === 0 && currentMonth >= 6) ||
-        (q === 1 && currentMonth >= 9) ||
-        (q === 2 && currentMonth >= 0 && currentMonth < 3)
-      ) {
-        quarters.push({
-          id: `FY${fiscalYear}-Q${q + 1}`,
-          label: quarterLabel,
-          fiscalYear: fiscalYear,
-        });
-      }
-    }
-
-    // Add quarters for previous fiscal year
-    const prevFiscalYear = fiscalYear - 1;
-    for (let q = 0; q < 4; q++) {
-      quarters.push({
-        id: `FY${prevFiscalYear}-Q${q + 1}`,
-        label: getQuarterLabel(q, prevFiscalYear),
-        fiscalYear: prevFiscalYear,
-      });
-    }
-
-    // Add quarters for fiscal year before that
-    const prevPrevFiscalYear = fiscalYear - 2;
-    for (let q = 0; q < 4; q++) {
-      quarters.push({
-        id: `FY${prevPrevFiscalYear}-Q${q + 1}`,
-        label: getQuarterLabel(q, prevPrevFiscalYear),
-        fiscalYear: prevPrevFiscalYear,
-      });
-    }
-
-    return quarters;
-  };
-
-  // Generate available fiscal years for selection
-  const getAvailableYears = () => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    // Current fiscal year
-    const fiscalYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-
-    const years = [];
-
-    // Current fiscal year (may be till date)
-    years.push({
-      id: `FY${fiscalYear}`,
-      label: `FY${fiscalYear}-${String(fiscalYear + 1).slice(-2)} ${
-        currentMonth < 3 ? "(Till Date)" : ""
-      }`,
-      fiscalYear,
-    });
-
-    // Previous 5 fiscal years
-    for (let i = 1; i <= 5; i++) {
-      const year = fiscalYear - i;
-      years.push({
-        id: `FY${year}`,
-        label: `FY${year}-${String(year + 1).slice(-2)}`,
-        fiscalYear: year,
-      });
-    }
-
-    return years;
-  };
-
-  // Helper function to get quarter label
-  const getQuarterLabel = (quarter, fiscalYear) => {
-    switch (quarter) {
-      case 0:
-        return `Q1 (Apr-Jun) FY${fiscalYear}-${String(fiscalYear + 1).slice(
-          -2
-        )}`;
-      case 1:
-        return `Q2 (Jul-Sep) FY${fiscalYear}-${String(fiscalYear + 1).slice(
-          -2
-        )}`;
-      case 2:
-        return `Q3 (Oct-Dec) FY${fiscalYear}-${String(fiscalYear + 1).slice(
-          -2
-        )}`;
-      case 3:
-        return `Q4 (Jan-Mar) FY${fiscalYear}-${String(fiscalYear + 1).slice(
-          -2
-        )}`;
-      default:
-        return `Unknown Quarter FY${fiscalYear}`;
-    }
-  };
-
-  // Handle quarter selection
-  const handleQuarterSelection = (quarter) => {
-    setSelectedQuarters((prev) => {
-      // If already selected, remove it
-      if (prev.includes(quarter)) {
-        return prev.filter((q) => q !== quarter);
-      }
-
-      // If adding would exceed 3 quarters, show warning and limit to 3
-      if (prev.length >= 3) {
-        setShowQuarterWarning(true);
-        return [...prev.slice(1), quarter]; // Remove oldest, add newest
-      }
-
-      setShowQuarterWarning(false);
-      return [...prev, quarter];
-    });
-  };
-
-  // Handle year selection
-  const handleYearSelection = (year) => {
-    setSelectedYears((prev) => {
-      if (prev.includes(year)) {
-        return prev.filter((y) => y !== year);
-      }
-      return [...prev, year];
-    });
   };
 
   // Filter profiles by selected network type
@@ -1202,28 +1038,10 @@ const Analytics = ({ profiles, customerId }) => {
           formatStr = "_Monthly";
           break;
         case "quarterly":
-          if (selectedQuarters.length > 0) {
-            // Extract just the quarter numbers and fiscal years for the filename
-            const quarterInfo = selectedQuarters
-              .map((q) => {
-                const parts = q.split("-");
-                const fyPart = parts[0]; // FYxxxx
-                const qPart = parts[1]; // Qx
-                return `${qPart}_${fyPart}`;
-              })
-              .join("_");
-            formatStr = `_Quarterly_${quarterInfo}`;
-          } else {
-            formatStr = "_Quarterly";
-          }
+          formatStr = "_Quarterly";
           break;
         case "yearly":
-          if (selectedYears.length > 0) {
-            const yearInfo = selectedYears.join("_");
-            formatStr = `_Yearly_${yearInfo}`;
-          } else {
-            formatStr = "_Yearly";
-          }
+          formatStr = "_Yearly";
           break;
         default:
           formatStr = "_Daily";
@@ -1280,32 +1098,146 @@ const Analytics = ({ profiles, customerId }) => {
     return hasMetrics;
   };
 
-  // Update the handleExportToExcel function to use the profilesMap for consistency
+  // Handle export format change
+  const handleExportFormatChange = (format) => {
+    setExportFormat(format);
+
+    // If yearly format is selected, set the date range to the selected year
+    if (format === "yearly") {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth();
+
+      // If selected year is current year, set end date to today
+      if (selectedYear === currentYear) {
+        // For fiscal year, start from April 1st
+        setStartDate(new Date(selectedYear, 3, 1)); // April 1st of selected year
+        setEndDate(new Date()); // Today
+      } else {
+        // For past fiscal years, set to full fiscal year (April 1st to March 31st)
+        setStartDate(new Date(selectedYear, 3, 1)); // April 1st
+        setEndDate(new Date(selectedYear + 1, 2, 31)); // March 31st of next year
+      }
+    }
+  };
+
+  // Handle date change with validation
+  const handleStartDateChange = (date) => {
+    setStartDate(date);
+
+    // If end date is before start date, update end date
+    if (endDate && date > endDate) {
+      setEndDate(date);
+    }
+
+    // If date range exceeds one year, show warning
+    if (endDate) {
+      const diffTime = Math.abs(endDate.getTime() - date.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 365) {
+        toast.error(
+          "Date range cannot exceed one year. End date will be adjusted."
+        );
+        // Set end date to one year after start date
+        const newEndDate = new Date(date);
+        newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+        setEndDate(newEndDate);
+      }
+    }
+  };
+
+  const handleEndDateChange = (date) => {
+    setEndDate(date);
+
+    // If start date is after end date, update start date
+    if (startDate && date < startDate) {
+      setStartDate(date);
+    }
+
+    // If date range exceeds one year, show warning
+    if (startDate) {
+      const diffTime = Math.abs(date.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 365) {
+        toast.error(
+          "Date range cannot exceed one year. Start date will be adjusted."
+        );
+        // Set start date to one year before end date
+        const newStartDate = new Date(date);
+        newStartDate.setFullYear(newStartDate.getFullYear() - 1);
+        setStartDate(newStartDate);
+      }
+    }
+  };
+
+  // Handle year selection
+  const handleYearChange = (year) => {
+    const yearNum = parseInt(year);
+    setSelectedYear(yearNum);
+
+    // Only update dates if yearly format is selected
+    if (exportFormat === "yearly") {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth();
+
+      // If selected year is current year, set end date to today
+      if (yearNum === currentYear) {
+        // For fiscal year, start from April 1st
+        setStartDate(new Date(yearNum, 3, 1)); // April 1st of selected year
+        setEndDate(new Date()); // Today
+      } else {
+        // For past fiscal years, set to full fiscal year (April 1st to March 31st)
+        setStartDate(new Date(yearNum, 3, 1)); // April 1st
+        setEndDate(new Date(yearNum + 1, 2, 31)); // March 31st of next year
+      }
+    }
+  };
+
+  // Generate years for dropdown (from 1990 to current year)
+  const generateYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+
+    // Generate fiscal years (from 1990 to current year)
+    for (let year = currentYear; year >= 1990; year--) {
+      years.push({
+        value: year,
+        label: `FY${year}-${String(year + 1).slice(-2)}`,
+      });
+    }
+
+    return years;
+  };
+
+  // Update the handleExportToExcel function to include validation
   const handleExportToExcel = async () => {
     setLoading(true);
     setError(null);
     setAnalyticsData(null); // Clear previous data
 
     try {
+      // Validate date range
+      if (!validateDateRange()) {
+        setLoading(false);
+        return;
+      }
+
       // Validate inputs
-      if (!startDate || !endDate) {
-        setError("Please select start and end dates");
-        return;
-      }
-
       if (selectedProfiles.length === 0) {
-        setError("Please select at least one profile");
+        toast.error("Please select at least one profile");
+        setLoading(false);
         return;
       }
 
-      // Validate quarter/year selection
-      if (exportFormat === "quarterly" && selectedQuarters.length === 0) {
-        setError("Please select at least one quarter for quarterly export");
-        return;
-      }
+      // Check if any metrics are selected
+      const hasSelectedMetrics = Object.values(selectedMetricsByNetwork).some(
+        (metrics) => metrics && metrics.length > 0
+      );
 
-      if (exportFormat === "yearly" && selectedYears.length === 0) {
-        setError("Please select at least one fiscal year for yearly export");
+      if (!hasSelectedMetrics) {
+        toast.error("Please select at least one metric for export");
+        setLoading(false);
         return;
       }
 
@@ -1334,44 +1266,24 @@ const Analytics = ({ profiles, customerId }) => {
       // All formatted data that we'll collect from multiple API calls
       const allFormattedData = [];
 
-      // Make separate API calls for each network type
+      // Process each network type separately
       for (const [networkType, networkProfiles] of Object.entries(
         profilesByNetwork
       )) {
-        // Normalize network type for metrics selection
-        let exportNetworkType = networkType;
-        if (networkType === "fb_page" || networkType === "facebook") {
-          exportNetworkType = "facebook";
-        }
-
-        // Get metrics for this network type
-        const selectedMetrics =
-          selectedMetricsByNetwork[exportNetworkType] || [];
-
-        if (!selectedMetrics || selectedMetrics.length === 0) {
-          console.warn(
-            `No metrics selected for ${exportNetworkType}, skipping`
-          );
-          continue;
-        }
-
-        // Get profile IDs for this network
         const profileIds = networkProfiles.map((p) => p.customer_profile_id);
+        const selectedMetrics = selectedMetricsByNetwork[networkType] || [];
 
-        // Get required metrics with dependencies
-        const apiMetrics = getMetricsWithDependencies(
-          selectedMetrics,
-          exportNetworkType
-        );
+        // Get the selected metrics with all dependencies for calculated metrics
+        const apiMetrics = getMetricsWithDependencies(selectedMetrics);
 
         try {
-          // Make API call for this network type and its profiles
+          // Always fetch daily data first
           const apiParams = {
             customerId,
             profileId: profileIds,
             startDate: safeFormat(startDate, "yyyy-MM-dd"),
             endDate: safeFormat(endDate, "yyyy-MM-dd"),
-            reportingPeriod: exportFormat,
+            reportingPeriod: "daily", // Always fetch daily data
             metrics: apiMetrics,
           };
 
@@ -1382,54 +1294,33 @@ const Analytics = ({ profiles, customerId }) => {
 
           if (!response) {
             console.warn(`No response for ${networkType}, skipping`);
+            toast.error(
+              `No data available for ${
+                NETWORK_DISPLAY_NAMES[networkType] || networkType
+              }`
+            );
+            continue;
+          }
+
+          if (!response.data || response.data.length === 0) {
+            toast.error(
+              `No data available for the selected date range for ${
+                NETWORK_DISPLAY_NAMES[networkType] || networkType
+              }`
+            );
             continue;
           }
 
           // Format the data with the appropriate formatter
-          const formatter = getNetworkFormatter(exportNetworkType);
+          const formatter = getNetworkFormatter(networkType);
           const formattedData = formatter(response, selectedMetrics);
 
           if (formattedData && formattedData.length > 0) {
-            // Process the formatted data as needed (e.g., aggregate by period)
+            // Process the formatted data based on export format
             let processedData = formattedData;
 
-            // Apply any needed aggregation based on export format
-            if (exportFormat === "quarterly" && selectedQuarters.length > 0) {
-              const aggregatedData = groupDataByReportingPeriod(
-                formattedData,
-                exportFormat,
-                new Date(startDate),
-                new Date(endDate)
-              );
-
-              // Filter to only keep selected quarters
-              processedData = aggregatedData.filter((row) => {
-                return selectedQuarters.some((quarter) => {
-                  const quarterPattern = quarter.replace(
-                    "FY",
-                    "FY\\d+-\\d+.*Q"
-                  );
-                  const regex = new RegExp(quarterPattern);
-                  return regex.test(row.Date);
-                });
-              });
-            } else if (exportFormat === "yearly" && selectedYears.length > 0) {
-              const aggregatedData = groupDataByReportingPeriod(
-                formattedData,
-                exportFormat,
-                new Date(startDate),
-                new Date(endDate)
-              );
-
-              // Filter to only keep selected years
-              processedData = aggregatedData.filter((row) => {
-                return selectedYears.some((year) => {
-                  const yearPattern = year.replace("FY", "FY");
-                  const regex = new RegExp(yearPattern);
-                  return regex.test(row.Date);
-                });
-              });
-            } else if (exportFormat !== "daily") {
+            // If not daily format, aggregate the data
+            if (exportFormat !== "daily") {
               processedData = groupDataByReportingPeriod(
                 formattedData,
                 exportFormat,
@@ -1438,26 +1329,40 @@ const Analytics = ({ profiles, customerId }) => {
               );
             }
 
-            // Add all processed data to our collection
             allFormattedData.push(...processedData);
+          } else {
+            toast.error(
+              `No formatted data available for ${
+                NETWORK_DISPLAY_NAMES[networkType] || networkType
+              }`
+            );
           }
-        } catch (apiError) {
-          console.error(`API call failed for ${networkType}:`, apiError);
-          // Continue with other network types instead of failing completely
+        } catch (error) {
+          console.error(`Error processing ${networkType}:`, error);
+          toast.error(
+            `Error processing data for ${
+              NETWORK_DISPLAY_NAMES[networkType] || networkType
+            }: ${error.message}`
+          );
+          // Continue with other networks even if one fails
         }
       }
 
+      // Check if we have any data to export
       if (allFormattedData.length === 0) {
-        setError("No data available to export after API calls");
+        toast.error(
+          "No data available to export. Please check your selections and try again."
+        );
+        setLoading(false);
         return;
       }
 
-      // Export all collected data to Excel
+      // Export the collected data
       await exportToExcel(allFormattedData);
-      toast.success("Excel file exported successfully!");
+      toast.success("Data exported successfully!");
     } catch (error) {
-      console.error("General error:", error);
-      setError(`Error: ${error.message}`);
+      console.error("Error in handleExportToExcel:", error);
+      toast.error(`Error exporting data: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -1515,6 +1420,32 @@ const Analytics = ({ profiles, customerId }) => {
     window.location.href = YOUTUBE_POST_METRICS_PATH;
   };
 
+  // Validate date range
+  const validateDateRange = () => {
+    if (!startDate || !endDate) {
+      toast.error("Please select both start and end dates");
+      return false;
+    }
+
+    if (startDate.getTime() === endDate.getTime()) {
+      toast.error("Start and end dates cannot be the same");
+      return false;
+    }
+
+    // Calculate the difference in days
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 365) {
+      toast.error(
+        "Date range cannot exceed one year. Please select a shorter period."
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   return (
     <div>
       {/* Report configuration panel - Always shown */}
@@ -1525,7 +1456,10 @@ const Analytics = ({ profiles, customerId }) => {
             <Label htmlFor="export-format" className="block mb-2">
               Export Format
             </Label>
-            <Select value={exportFormat} onValueChange={setExportFormat}>
+            <Select
+              value={exportFormat}
+              onValueChange={handleExportFormatChange}
+            >
               <SelectTrigger
                 id="export-format"
                 className="w-full border border-gray-300 bg-white"
@@ -1540,93 +1474,75 @@ const Analytics = ({ profiles, customerId }) => {
                 ))}
               </SelectContent>
             </Select>
-
-            {/* Show quarter selection if quarterly export format is selected */}
-            {exportFormat === "quarterly" && (
-              <div className="mt-4">
-                <Label className="block mb-2">Select Quarters (Max 3)</Label>
-                {showQuarterWarning && (
-                  <p className="text-yellow-500 text-xs mb-2">
-                    Only a maximum of 3 quarters can be selected. Oldest
-                    selection was removed.
-                  </p>
-                )}
-                <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
-                  {getAvailableQuarters().map((quarter) => (
-                    <div
-                      key={quarter.id}
-                      className="flex items-center space-x-2"
-                    >
-                      <Checkbox
-                        id={`quarter-${quarter.id}`}
-                        checked={selectedQuarters.includes(quarter.id)}
-                        onCheckedChange={() =>
-                          handleQuarterSelection(quarter.id)
-                        }
-                      />
-                      <Label
-                        htmlFor={`quarter-${quarter.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {quarter.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Show year selection if yearly export format is selected */}
-            {exportFormat === "yearly" && (
-              <div className="mt-4">
-                <Label className="block mb-2">Select Fiscal Years</Label>
-                <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
-                  {getAvailableYears().map((year) => (
-                    <div key={year.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`year-${year.id}`}
-                        checked={selectedYears.includes(year.id)}
-                        onCheckedChange={() => handleYearSelection(year.id)}
-                      />
-                      <Label
-                        htmlFor={`year-${year.id}`}
-                        className="text-sm font-normal cursor-pointer"
-                      >
-                        {year.label}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Date Range */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
-              <Label htmlFor="start-date" className="block mb-2">
-                Start Date
-              </Label>
-              <DatePicker
-                selected={startDate}
-                onChange={(date) => setStartDate(date)}
-                dateFormat="MMMM d, yyyy"
-                className="border border-gray-300 p-2 rounded-md w-full"
-                placeholderText="Select a start date"
-              />
-            </div>
-            <div>
-              <Label htmlFor="end-date" className="block mb-2">
-                End Date
-              </Label>
-              <DatePicker
-                selected={endDate}
-                onChange={(date) => setEndDate(date)}
-                dateFormat="MMMM d, yyyy"
-                className="border border-gray-300 p-2 rounded-md w-full"
-                placeholderText="Select an end date"
-              />
-            </div>
+            {exportFormat === "yearly" ? (
+              <div className="md:col-span-2">
+                <Label htmlFor="year-select" className="block mb-2">
+                  Select Fiscal Year
+                </Label>
+                <Select
+                  value={selectedYear.toString()}
+                  onValueChange={handleYearChange}
+                >
+                  <SelectTrigger
+                    id="year-select"
+                    className="w-full border border-gray-300 bg-white"
+                  >
+                    <SelectValue placeholder="Select a fiscal year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {generateYearOptions().map((year) => (
+                      <SelectItem
+                        key={year.value}
+                        value={year.value.toString()}
+                      >
+                        {year.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="mt-2 text-sm text-gray-500">
+                  {selectedYear === new Date().getFullYear()
+                    ? `Date range: April 1, ${selectedYear} to today`
+                    : `Date range: April 1, ${selectedYear} to March 31, ${
+                        selectedYear + 1
+                      }`}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="start-date" className="block mb-2">
+                    Start Date
+                  </Label>
+                  <DatePicker
+                    selected={startDate}
+                    onChange={handleStartDateChange}
+                    dateFormat="MMMM d, yyyy"
+                    className="border border-gray-300 p-2 rounded-md w-full"
+                    placeholderText="Select a start date"
+                    maxDate={endDate || new Date()}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="end-date" className="block mb-2">
+                    End Date
+                  </Label>
+                  <DatePicker
+                    selected={endDate}
+                    onChange={handleEndDateChange}
+                    dateFormat="MMMM d, yyyy"
+                    className="border border-gray-300 p-2 rounded-md w-full"
+                    placeholderText="Select an end date"
+                    minDate={startDate}
+                    maxDate={new Date()}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* Networks Section */}
