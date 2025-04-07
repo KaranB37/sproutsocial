@@ -13,11 +13,25 @@ import { Separator } from "@/components/ui/separator";
 import SocialMediaProfiles from "@/components/SocialMediaProfiles";
 import Analytics from "@/components/Analytics";
 import { LayoutDashboard, BarChart2, Users } from "lucide-react";
+import { logProfilesInfo } from "@/utils/debug";
+import { isYouTubeProfile } from "@/utils/profileHelpers";
 
 export default function Dashboard({ profiles, customerId, analyticsData }) {
   const router = useRouter();
   const { groupId } = router.query;
   const [groupName, setGroupName] = useState("");
+
+  // Debug profiles data when component mounts or profiles change
+  useEffect(() => {
+    try {
+      console.log("Dashboard received profiles:", profiles?.length || 0);
+      if (profiles && profiles.length > 0) {
+        logProfilesInfo(profiles);
+      }
+    } catch (error) {
+      console.error("Error logging profile info:", error);
+    }
+  }, [profiles]);
 
   // Only extract data if analyticsData exists
   let lifetimeFollowersCount = null;
@@ -45,6 +59,11 @@ export default function Dashboard({ profiles, customerId, analyticsData }) {
     }
   }, [profiles, groupId]);
 
+  // Count YouTube profiles
+  const youtubeProfilesCount = profiles
+    ? profiles.filter(isYouTubeProfile).length
+    : 0;
+
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <div className="flex-1 space-y-6 p-8 pt-6">
@@ -65,6 +84,13 @@ export default function Dashboard({ profiles, customerId, analyticsData }) {
                 </span>
               </div>
             )}
+            {youtubeProfilesCount > 0 && (
+              <div className="mt-1 text-sm text-gray-500">
+                <span className="text-red-600">{youtubeProfilesCount}</span>{" "}
+                YouTube {youtubeProfilesCount === 1 ? "profile" : "profiles"}{" "}
+                available with post metrics
+              </div>
+            )}
           </div>
         </div>
 
@@ -77,6 +103,11 @@ export default function Dashboard({ profiles, customerId, analyticsData }) {
               <span className="flex items-center">
                 <LayoutDashboard className="mr-2 h-4 w-4" />
                 Profiles
+                {youtubeProfilesCount > 0 && (
+                  <span className="ml-2 bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded">
+                    YT Metrics
+                  </span>
+                )}
               </span>
             </TabsTrigger>
             <TabsTrigger
@@ -108,7 +139,10 @@ export default function Dashboard({ profiles, customerId, analyticsData }) {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <ScrollArea className="h-[calc(100vh-300px)]">
-                    <SocialMediaProfiles profiles={profiles} />
+                    <SocialMediaProfiles
+                      profiles={profiles}
+                      customerId={customerId}
+                    />
                   </ScrollArea>
                 </CardContent>
               </Card>

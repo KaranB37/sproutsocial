@@ -42,6 +42,7 @@ import {
   INSTAGRAM_CALCULATED_METRICS,
   LINKEDIN_CALCULATED_METRICS,
   TWITTER_CALCULATED_METRICS,
+  YOUTUBE_CALCULATED_METRICS,
 } from "@/utils/metricDefinitions";
 
 // Define export format options
@@ -192,7 +193,8 @@ const NETWORK_METRICS = {
     { id: "followers_lost", label: "Subscribers Lost" },
     { id: "posts_sent_count", label: "Posts Sent" },
     { id: "likes", label: "Likes" },
-    { id: "posts_sent_count", label: "Videos Published" },
+    { id: "video_views", label: "Video Views" },
+    ...YOUTUBE_CALCULATED_METRICS,
   ],
 
   twitter: [
@@ -236,6 +238,20 @@ const NETWORK_METRICS = {
   threads: [{ id: "lifetime_snapshot.followers_count", label: "Followers" }],
 };
 
+// Network display order
+const NETWORK_DISPLAY_ORDER = [
+  "fb_instagram_account",
+  "linkedin_company",
+  "facebook",
+  "threads",
+  "youtube",
+  "twitter",
+  "tiktok",
+];
+
+// URL path for YouTube post metrics
+const YOUTUBE_POST_METRICS_PATH = "/youtube-post-metrics";
+
 const Analytics = ({ profiles, customerId }) => {
   // State for form inputs
   const [startDate, setStartDate] = useState(new Date());
@@ -260,6 +276,9 @@ const Analytics = ({ profiles, customerId }) => {
   const [selectedQuarters, setSelectedQuarters] = useState([]);
   const [selectedYears, setSelectedYears] = useState([]);
   const [showQuarterWarning, setShowQuarterWarning] = useState(false);
+
+  // Add state for YouTube metrics modal
+  const [showYoutubeMetricsModal, setShowYoutubeMetricsModal] = useState(false);
 
   // Initialize profilesMap when profiles data is available
   useEffect(() => {
@@ -969,6 +988,20 @@ const Analytics = ({ profiles, customerId }) => {
             !key.includes("followers_count")
         );
 
+        // Identify rate metrics that need special handling
+        const rateMetrics = metrics.filter(
+          (key) =>
+            key.includes("engagement_rate_per_follower") ||
+            key.includes("engagement_rate_per_impression")
+        );
+
+        // Track the component values needed for calculating rates
+        const rateComponents = {
+          calculated_engagements: 0,
+          impressions: 0,
+          lifetime_snapshot_followers_count: 0,
+        };
+
         // Initialize totals
         metrics.forEach((metric) => {
           totals[metric] = 0;
@@ -1006,8 +1039,30 @@ const Analytics = ({ profiles, customerId }) => {
               key !== "Network" &&
               key !== "Profile Name"
             ) {
-              totals[key] = (totals[key] || 0) + formattedRow[key];
+              // Don't total up rate metrics, we'll calculate them later based on components
+              if (!rateMetrics.includes(key)) {
+                totals[key] = (totals[key] || 0) + formattedRow[key];
+              }
+
+              // Track component values for rate calculations if present
+              if (key === "calculated_engagements") {
+                rateComponents.calculated_engagements += formattedRow[key];
+              }
+              if (key === "impressions") {
+                rateComponents.impressions += formattedRow[key];
+              }
+
               lastValues[key] = formattedRow[key]; // Store the last value
+            }
+
+            // Track the last follower count for rate calculations
+            if (
+              key === "lifetime_snapshot.followers_count" &&
+              formattedRow[key] !== null
+            ) {
+              // For follower count, we'll use the last value for calculations
+              rateComponents.lifetime_snapshot_followers_count =
+                formattedRow[key];
             }
 
             // Convert any objects or arrays to strings
@@ -1038,7 +1093,32 @@ const Analytics = ({ profiles, customerId }) => {
 
         // Add the totals and last values for each metric
         metrics.forEach((metric) => {
-          totalRow[metric] = totals[metric];
+          // For rate metrics, calculate them properly instead of summing
+          if (metric === "engagement_rate_per_follower") {
+            // Calculate based on components: engagements / followers
+            if (rateComponents.lifetime_snapshot_followers_count > 0) {
+              totalRow[metric] =
+                (rateComponents.calculated_engagements /
+                  rateComponents.lifetime_snapshot_followers_count) *
+                100;
+            } else {
+              totalRow[metric] = "N/A";
+            }
+          } else if (metric === "engagement_rate_per_impression") {
+            // Calculate based on components: engagements / impressions
+            if (rateComponents.impressions > 0) {
+              totalRow[metric] =
+                (rateComponents.calculated_engagements /
+                  rateComponents.impressions) *
+                100;
+            } else {
+              totalRow[metric] = "N/A";
+            }
+          } else {
+            // For non-rate metrics, use the sum
+            totalRow[metric] = totals[metric];
+          }
+
           lastRow[metric] = lastValues[metric];
         });
 
@@ -1416,6 +1496,25 @@ const Analytics = ({ profiles, customerId }) => {
     }
   };
 
+  /**
+   * Handle click on Export button
+   */
+  const handleExport = () => {
+    if (selectedNetworkType === "youtube") {
+      // For YouTube, provide option to go to Post Metrics
+      setShowYoutubeMetricsModal(true);
+    } else {
+      handleExportToExcel();
+    }
+  };
+
+  /**
+   * Handle navigating to YouTube Post Metrics
+   */
+  const handleGoToYoutubePostMetrics = () => {
+    window.location.href = YOUTUBE_POST_METRICS_PATH;
+  };
+
   return (
     <div>
       {/* Report configuration panel - Always shown */}
@@ -1773,7 +1872,7 @@ const Analytics = ({ profiles, customerId }) => {
         <Button
           variant="outline"
           className="bg-white border border-gray-300 text-gray-800 hover:bg-gray-50"
-          onClick={handleExportToExcel}
+          onClick={handleExport}
           disabled={loading}
         >
           {loading ? (
@@ -1786,6 +1885,44 @@ const Analytics = ({ profiles, customerId }) => {
           )}
         </Button>
       </div>
+
+      {/* YouTube Post Metrics Modal */}
+      {showYoutubeMetricsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold mb-4">
+              YouTube Analytics Options
+            </h3>
+            <p className="mb-4">
+              Would you like to export regular analytics or view post-level
+              metrics?
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowYoutubeMetricsModal(false);
+                  handleExportToExcel();
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Export Regular Analytics
+              </button>
+              <button
+                onClick={handleGoToYoutubePostMetrics}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                View Post Metrics
+              </button>
+            </div>
+            <button
+              onClick={() => setShowYoutubeMetricsModal(false)}
+              className="mt-3 w-full px-4 py-2 bg-gray-100 rounded hover:bg-gray-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
