@@ -64,6 +64,9 @@ const NETWORK_DISPLAY_NAMES = {
   tiktok: "TikTok",
   youtube: "YouTube",
   twitter: "Twitter",
+  instagram: "Instagram",
+  linkedin: "LinkedIn",
+  // Add any other network types that might be used
 };
 
 // Updated comprehensive network metrics based on Sprout Social API
@@ -72,78 +75,11 @@ const NETWORK_METRICS = {
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
     { id: "net_follower_growth", label: "Net Follower Growth" },
     { id: "followers_gained", label: "Followers Gained" },
-    { id: "followers_gained_organic", label: "Organic Followers Gained" },
-    { id: "followers_gained_paid", label: "Paid Followers Gained" },
-    { id: "followers_lost", label: "Page Unlikes" },
-    { id: "lifetime_snapshot.fans_count", label: "Fans" },
-    { id: "fans_gained", label: "Page Likes" },
-    { id: "fans_gained_organic", label: "Organic Page Likes" },
-    { id: "fans_gained_paid", label: "Paid Page Likes" },
-    { id: "fans_lost", label: "Page Unlikes" },
+    { id: "followers_lost", label: "Followers Lost" },
     { id: "impressions", label: "Impressions" },
-    { id: "impressions_organic", label: "Organic Impressions" },
-    { id: "impressions_viral", label: "Viral Impressions" },
-    { id: "impressions_nonviral", label: "Non-viral Impressions" },
-    { id: "impressions_paid", label: "Paid Impressions" },
-    { id: "tab_views", label: "Page Tab Views" },
-    { id: "tab_views_login", label: "Logged In Page Tab Views" },
-    { id: "tab_views_logout", label: "Logged Out Page Tab Views" },
-    { id: "post_impressions", label: "Post Impressions" },
-    { id: "post_impressions_organic", label: "Organic Post Impressions" },
-    { id: "post_impressions_viral", label: "Viral Post Impressions" },
-    { id: "post_impressions_nonviral", label: "Non-viral Post Impressions" },
-    { id: "post_impressions_paid", label: "Paid Post Impressions" },
-    { id: "impressions_unique", label: "Reach" },
-    { id: "impressions_organic_unique", label: "Organic Reach" },
-    { id: "impressions_viral_unique", label: "Viral Reach" },
-    { id: "impressions_nonviral_unique", label: "Non-viral Reach" },
-    { id: "impressions_paid_unique", label: "Paid Reach" },
     { id: "reactions", label: "Reactions" },
     { id: "comments_count", label: "Comments" },
     { id: "shares_count", label: "Shares" },
-    { id: "post_link_clicks", label: "Post Link Clicks" },
-    { id: "post_content_clicks_other", label: "Other Post Clicks" },
-    { id: "profile_actions", label: "Page Actions" },
-    { id: "post_engagements", label: "Post Engagements" },
-    { id: "video_views", label: "Video Views" },
-    { id: "video_views_organic", label: "Organic Video Views" },
-    { id: "video_views_paid", label: "Paid Video Views" },
-    { id: "video_views_autoplay", label: "Autoplay Video Views" },
-    { id: "video_views_click_to_play", label: "Click to Play Video Views" },
-    { id: "video_views_repeat", label: "Replayed Video Views" },
-    { id: "video_view_time", label: "Video View Time" },
-    { id: "video_views_unique", label: "Unique Video Views" },
-    { id: "video_views_30s_complete", label: "Full Video Views" },
-    {
-      id: "video_views_30s_complete_organic",
-      label: "Organic Full Video Views",
-    },
-    { id: "video_views_30s_complete_paid", label: "Paid Full Video Views" },
-    {
-      id: "video_views_30s_complete_autoplay",
-      label: "Autoplay Full Video Views",
-    },
-    {
-      id: "video_views_30s_complete_click_to_play",
-      label: "Click to Play Full Video Views",
-    },
-    {
-      id: "video_views_30s_complete_repeat",
-      label: "Replayed Full Video Views",
-    },
-    { id: "video_views_30s_complete_unique", label: "Unique Full Video Views" },
-    { id: "video_views_partial", label: "Partial Video Views" },
-    { id: "video_views_partial_organic", label: "Organic Partial Video Views" },
-    { id: "video_views_partial_paid", label: "Paid Partial Video Views" },
-    {
-      id: "video_views_partial_autoplay",
-      label: "Autoplay Partial Video Views",
-    },
-    {
-      id: "video_views_partial_click_to_play",
-      label: "Click to Play Partial Video Views",
-    },
-    { id: "video_views_partial_repeat", label: "Replayed Partial Video Views" },
     { id: "posts_sent_count", label: "Posts Sent Count" },
     ...FACEBOOK_CALCULATED_METRICS,
   ],
@@ -301,15 +237,6 @@ const CALCULATED_METRICS = {
       calculate: (data) => {
         if (!data.impressions || data.impressions === 0) return 0;
         return (data.engagements / data.impressions) * 100;
-      },
-    },
-    reach_rate: {
-      id: "reach_rate",
-      label: "Reach Rate",
-      dependencies: ["reach", "followers"],
-      calculate: (data) => {
-        if (!data.followers || data.followers === 0) return 0;
-        return (data.reach / data.followers) * 100;
       },
     },
   },
@@ -691,21 +618,22 @@ const Analytics = ({ profiles, customerId }) => {
         // Sort rows by date
         profileRows.sort((a, b) => new Date(a.Date) - new Date(b.Date));
 
-        // Get the network type from the first row
+        // Get the network type and profile name
         const networkType = profileRows[0].Network;
-
-        // Create a worksheet for this profile
         const profileName = profileRows[0]["Profile Name"];
-        let sheetName = `${profileName} (${NETWORK_DISPLAY_NAMES[networkType]})`;
+        let sheetName = `${profileName || "Unknown Profile"} (${
+          NETWORK_DISPLAY_NAMES[networkType] || networkType
+        })`;
+        let originalSheetName = sheetName;
+        let counter = 1;
 
-        // Check if sheet name already exists and add timestamp if needed
-        let sheet = workbook.getWorksheet(sheetName);
-        if (sheet) {
-          const timestamp = new Date().getTime();
-          sheetName = `${sheetName}_${timestamp}`;
+        // Check if sheet name already exists and add counter if needed
+        while (workbook.getWorksheet(sheetName)) {
+          sheetName = `${originalSheetName} (${counter})`;
+          counter++;
         }
 
-        sheet = workbook.addWorksheet(sheetName);
+        const sheet = workbook.addWorksheet(sheetName);
 
         // Get all available metrics for this network
         const availableMetrics = new Set();
@@ -734,10 +662,12 @@ const Analytics = ({ profiles, customerId }) => {
 
         // Calculate totals and add them at the bottom
         const totalRow = ["Total"];
+        const totals = {};
         headers.slice(1).forEach((metric) => {
           const values = profileRows.map((row) => row[metric] || 0);
           const total = values.reduce((sum, val) => sum + val, 0);
           totalRow.push(total);
+          totals[metric] = total;
         });
         sheet.addRow(totalRow);
 
@@ -749,11 +679,39 @@ const Analytics = ({ profiles, customerId }) => {
         });
         sheet.addRow(lastRow);
 
-        // Calculate and add rate metrics
+        // Add engagement rate based on totals for Instagram
+        if (
+          networkType === "fb_instagram_account" ||
+          networkType === "instagram"
+        ) {
+          sheet.addRow([]); // Empty row for spacing
+          const totalEngagements =
+            (totals.likes || 0) +
+            (totals.comments_count || 0) +
+            (totals.saves || 0);
+          const totalImpressions = totals.impressions || 0;
+          const overallEngagementRate =
+            totalImpressions > 0
+              ? (totalEngagements / totalImpressions) * 100
+              : 0;
+          sheet.addRow([
+            "Overall Engagement Rate",
+            `${overallEngagementRate.toFixed(2)}%`,
+          ]);
+        }
+
+        // Calculate and add rate metrics (keep existing rate metrics for other networks)
         const rateMetrics = Object.entries(
           CALCULATED_METRICS[networkType] || {}
         )
           .filter(([_, metric]) => metric.dependencies)
+          .filter(
+            ([id, _]) =>
+              !(
+                networkType === "fb_instagram_account" ||
+                networkType === "instagram"
+              )
+          ) // Skip for Instagram
           .map(([id, metric]) => ({
             id,
             ...metric,
@@ -773,7 +731,6 @@ const Analytics = ({ profiles, customerId }) => {
             metric.dependencies.forEach((dep) => {
               lastValues[dep] = profileRows[profileRows.length - 1][dep] || 0;
             });
-
             const rateValue = metric.calculate(lastValues);
             sheet.addRow([metric.label, `${rateValue.toFixed(2)}%`]);
           });
@@ -1183,6 +1140,10 @@ const Analytics = ({ profiles, customerId }) => {
             // Add network information to each row
             processedData.forEach((row) => {
               row.Network = networkType;
+              row["Profile Name"] =
+                row["Profile Name"] ||
+                profilesMap[row.profile_id]?.name ||
+                "Unknown Profile";
             });
 
             allFormattedData.push(...processedData);

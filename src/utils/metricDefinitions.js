@@ -47,8 +47,8 @@ export const FACEBOOK_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.impressions;
-      console.log(`Engagement rate: ${result}`);
+      const result = (engagements / metrics.impressions) * 100;
+      console.log(`Engagement rate: ${result}%`);
       return result;
     },
   },
@@ -69,8 +69,8 @@ export const FACEBOOK_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / fansCount;
-      console.log(`Engagement rate per fan: ${result}`);
+      const result = (engagements / fansCount) * 100;
+      console.log(`Engagement rate per fan: ${result}%`);
       return result;
     },
   },
@@ -88,8 +88,8 @@ export const FACEBOOK_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.impressions_unique;
-      console.log(`Engagement rate per reach: ${result}`);
+      const result = (engagements / metrics.impressions_unique) * 100;
+      console.log(`Engagement rate per reach: ${result}%`);
       return result;
     },
   },
@@ -107,8 +107,8 @@ export const FACEBOOK_CALCULATED_METRICS = [
 
       // Simple division - make sure post_link_clicks is available
       const clicks = metrics.post_link_clicks || 0;
-      const result = clicks / metrics.impressions;
-      console.log(`Click-through rate: ${result}`);
+      const result = (clicks / metrics.impressions) * 100;
+      console.log(`Click-through rate: ${result}%`);
       return result;
     },
   },
@@ -122,7 +122,14 @@ export const INSTAGRAM_CALCULATED_METRICS = [
     id: "calculated_engagements",
     label: "Engagements (Sprout's default)",
     isCalculated: true,
-    dependsOn: ["reactions", "comments_count", "shares_count", "saves"],
+    dependsOn: [
+      "reactions",
+      "comments_count",
+      "shares_count",
+      "saves",
+      "likes",
+      "story_replies",
+    ],
     calculate: (metrics) => {
       // Log the input values for debugging
       console.log("Calculating Instagram engagements with inputs:", {
@@ -131,13 +138,14 @@ export const INSTAGRAM_CALCULATED_METRICS = [
         comments: metrics.comments_count,
         shares: metrics.shares_count,
         saves: metrics.saves,
+        storyreplies: metrics.story_replies,
       });
-
       // Simple sum of all engagement metrics, with null/undefined safe handling
       return (
         (metrics.reactions || metrics.likes || 0) +
         (metrics.comments_count || 0) +
         (metrics.shares_count || 0) +
+        (metrics.story_replies || 0) +
         (metrics.saves || 0)
       );
     },
@@ -156,8 +164,8 @@ export const INSTAGRAM_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.impressions;
-      console.log(`Instagram engagement rate: ${result}`);
+      const result = (engagements / metrics.impressions) * 100;
+      console.log(`Instagram engagement rate: ${result}%`);
       return result;
     },
   },
@@ -178,8 +186,8 @@ export const INSTAGRAM_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / followersCount;
-      console.log(`Instagram engagement rate per follower: ${result}`);
+      const result = (engagements / followersCount) * 100;
+      console.log(`Instagram engagement rate per follower: ${result}%`);
       return result;
     },
   },
@@ -197,8 +205,8 @@ export const INSTAGRAM_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.impressions_unique;
-      console.log(`Instagram engagement rate per reach: ${result}`);
+      const result = (engagements / metrics.impressions_unique) * 100;
+      console.log(`Instagram engagement rate per reach: ${result}%`);
       return result;
     },
   },
@@ -250,8 +258,8 @@ export const LINKEDIN_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.impressions;
-      console.log(`LinkedIn engagement rate: ${result}`);
+      const result = (engagements / metrics.impressions) * 100;
+      console.log(`LinkedIn engagement rate: ${result}%`);
       return result;
     },
   },
@@ -272,8 +280,8 @@ export const LINKEDIN_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / followersCount;
-      console.log(`LinkedIn engagement rate per follower: ${result}`);
+      const result = (engagements / followersCount) * 100;
+      console.log(`LinkedIn engagement rate per follower: ${result}%`);
       return result;
     },
   },
@@ -291,8 +299,8 @@ export const LINKEDIN_CALCULATED_METRICS = [
 
       // Simple division - make sure clicks is available
       const clicks = metrics.clicks || 0;
-      const result = clicks / metrics.impressions;
-      console.log(`LinkedIn click-through rate: ${result}`);
+      const result = (clicks / metrics.impressions) * 100;
+      console.log(`LinkedIn click-through rate: ${result}%`);
       return result;
     },
   },
@@ -337,8 +345,8 @@ export const YOUTUBE_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.video_views;
-      console.log(`YouTube engagement rate per view: ${result}`);
+      const result = (engagements / metrics.video_views) * 100;
+      console.log(`YouTube engagement rate per view: ${result}%`);
       return result;
     },
   },
@@ -415,8 +423,8 @@ export const TWITTER_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / metrics.impressions;
-      console.log(`Twitter engagement rate: ${result}`);
+      const result = (engagements / metrics.impressions) * 100;
+      console.log(`Twitter engagement rate: ${result}%`);
       return result;
     },
   },
@@ -437,8 +445,8 @@ export const TWITTER_CALCULATED_METRICS = [
 
       // Simple division - make sure calculated_engagements is available
       const engagements = metrics.calculated_engagements || 0;
-      const result = engagements / followersCount;
-      console.log(`Twitter engagement rate per follower: ${result}`);
+      const result = (engagements / followersCount) * 100;
+      console.log(`Twitter engagement rate per follower: ${result}%`);
       return result;
     },
   },
@@ -456,8 +464,8 @@ export const TWITTER_CALCULATED_METRICS = [
 
       // Simple division - make sure post_link_clicks is available
       const clicks = metrics.post_link_clicks || 0;
-      const result = clicks / metrics.impressions;
-      console.log(`Twitter click-through rate: ${result}`);
+      const result = (clicks / metrics.impressions) * 100;
+      console.log(`Twitter click-through rate: ${result}%`);
       return result;
     },
   },
