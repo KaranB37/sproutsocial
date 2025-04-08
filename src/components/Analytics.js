@@ -44,6 +44,7 @@ import {
   TWITTER_CALCULATED_METRICS,
   YOUTUBE_CALCULATED_METRICS,
 } from "@/utils/metricDefinitions";
+import ExcelJS from "exceljs";
 
 // Define export format options
 const EXPORT_FORMATS = [
@@ -167,8 +168,8 @@ const NETWORK_METRICS = {
   ],
   linkedin_company: [
     { id: "lifetime_snapshot.followers_count", label: "Followers" },
-    { id: "followers_by_job_function", label: "Followers By Job" },
-    { id: "followers_by_seniority", label: "Followers By Seniority" },
+    // { id: "followers_by_job_function", label: "Followers By Job" },
+    // { id: "followers_by_seniority", label: "Followers By Seniority" },
     { id: "net_follower_growth", label: "Net Follower Growth" },
     { id: "followers_gained", label: "Followers Gained" },
     { id: "followers_gained_organic", label: "Organic Followers Gained" },
@@ -251,6 +252,106 @@ const NETWORK_DISPLAY_ORDER = [
 
 // URL path for YouTube post metrics
 const YOUTUBE_POST_METRICS_PATH = "/youtube-post-metrics";
+
+// Define calculated metrics for each network type
+const CALCULATED_METRICS = {
+  facebook: {
+    engagements: {
+      id: "engagements",
+      label: "Engagements",
+      dependencies: ["reactions", "comments", "shares"],
+      calculate: (data) => {
+        return (
+          (data.reactions || 0) + (data.comments || 0) + (data.shares || 0)
+        );
+      },
+    },
+    engagement_rate: {
+      id: "engagement_rate",
+      label: "Engagement Rate",
+      dependencies: ["engagements", "impressions"],
+      calculate: (data) => {
+        if (!data.impressions || data.impressions === 0) return 0;
+        return (data.engagements / data.impressions) * 100;
+      },
+    },
+    click_through_rate: {
+      id: "click_through_rate",
+      label: "Click-Through Rate",
+      dependencies: ["clicks", "impressions"],
+      calculate: (data) => {
+        if (!data.impressions || data.impressions === 0) return 0;
+        return (data.clicks / data.impressions) * 100;
+      },
+    },
+  },
+  instagram: {
+    engagements: {
+      id: "engagements",
+      label: "Engagements",
+      dependencies: ["likes", "comments", "saves"],
+      calculate: (data) => {
+        return (data.likes || 0) + (data.comments || 0) + (data.saves || 0);
+      },
+    },
+    engagement_rate: {
+      id: "engagement_rate",
+      label: "Engagement Rate",
+      dependencies: ["engagements", "impressions"],
+      calculate: (data) => {
+        if (!data.impressions || data.impressions === 0) return 0;
+        return (data.engagements / data.impressions) * 100;
+      },
+    },
+    reach_rate: {
+      id: "reach_rate",
+      label: "Reach Rate",
+      dependencies: ["reach", "followers"],
+      calculate: (data) => {
+        if (!data.followers || data.followers === 0) return 0;
+        return (data.reach / data.followers) * 100;
+      },
+    },
+  },
+  linkedin: {
+    engagements: {
+      id: "engagements",
+      label: "Engagements",
+      dependencies: ["likes", "comments", "shares"],
+      calculate: (data) => {
+        return (data.likes || 0) + (data.comments || 0) + (data.shares || 0);
+      },
+    },
+    engagement_rate: {
+      id: "engagement_rate",
+      label: "Engagement Rate",
+      dependencies: ["engagements", "impressions"],
+      calculate: (data) => {
+        if (!data.impressions || data.impressions === 0) return 0;
+        return (data.engagements / data.impressions) * 100;
+      },
+    },
+  },
+  twitter: {
+    engagements: {
+      id: "engagements",
+      label: "Engagements",
+      dependencies: ["likes", "retweets", "replies"],
+      calculate: (data) => {
+        return (data.likes || 0) + (data.retweets || 0) + (data.replies || 0);
+      },
+    },
+    engagement_rate: {
+      id: "engagement_rate",
+      label: "Engagement Rate",
+      dependencies: ["engagements", "impressions"],
+      calculate: (data) => {
+        if (!data.impressions || data.impressions === 0) return 0;
+        return (data.engagements / data.impressions) * 100;
+      },
+    },
+  },
+};
 
 const Analytics = ({ profiles, customerId }) => {
   // State for form inputs
@@ -471,7 +572,10 @@ const Analytics = ({ profiles, customerId }) => {
         selectedMetricsByNetwork[selectedNetworkType] || [];
 
       // Get the selected metrics with all dependencies for calculated metrics
-      const apiMetrics = getMetricsWithDependencies(selectedMetrics);
+      const apiMetrics = getMetricsWithDependencies(
+        selectedMetrics,
+        selectedNetworkType
+      );
 
       console.log("Fetching analytics with metrics:", apiMetrics);
 
@@ -542,116 +646,25 @@ const Analytics = ({ profiles, customerId }) => {
   };
 
   // Add this helper function to get all required metrics including dependencies
-  const getMetricsWithDependencies = (
-    selectedMetrics = [],
-    networkType = selectedNetworkType
-  ) => {
-    if (!selectedMetrics || !Array.isArray(selectedMetrics)) {
-      console.warn("Invalid selectedMetrics provided:", selectedMetrics);
+  const getMetricsWithDependencies = (selectedMetrics, networkType) => {
+    if (!selectedMetrics || selectedMetrics.length === 0) {
       return [];
     }
 
-    const metricsWithDependencies = new Set(selectedMetrics);
+    // Create a Set to track all metrics including dependencies
+    const allMetrics = new Set(selectedMetrics);
 
-    // Handle Facebook metrics
-    if (networkType === "facebook" || networkType === "fb_page") {
-      // Find dependencies for selected metrics from the FACEBOOK_CALCULATED_METRICS
-      selectedMetrics.forEach((metricId) => {
-        if (!metricId) return; // Skip null/undefined metrics
+    // Add dependencies for calculated metrics
+    selectedMetrics.forEach((metric) => {
+      // Check if this is a calculated metric
+      const calculatedMetric = CALCULATED_METRICS[networkType]?.[metric];
+      if (calculatedMetric && calculatedMetric.dependencies) {
+        calculatedMetric.dependencies.forEach((dep) => allMetrics.add(dep));
+      }
+    });
 
-        const calculatedMetric = FACEBOOK_CALCULATED_METRICS.find(
-          (m) => m.id === metricId
-        );
-
-        if (calculatedMetric && calculatedMetric.dependsOn) {
-          calculatedMetric.dependsOn.forEach((depMetric) => {
-            if (depMetric) {
-              // Make sure the dependency is valid
-              metricsWithDependencies.add(depMetric);
-              console.log(
-                `Added Facebook dependency ${depMetric} for ${metricId}`
-              );
-            }
-          });
-        }
-      });
-    }
-    // Handle Instagram metrics
-    else if (
-      networkType === "fb_instagram_account" ||
-      networkType === "instagram"
-    ) {
-      // Find dependencies for selected metrics from the INSTAGRAM_CALCULATED_METRICS
-      selectedMetrics.forEach((metricId) => {
-        if (!metricId) return; // Skip null/undefined metrics
-
-        const calculatedMetric = INSTAGRAM_CALCULATED_METRICS.find(
-          (m) => m.id === metricId
-        );
-
-        if (calculatedMetric && calculatedMetric.dependsOn) {
-          calculatedMetric.dependsOn.forEach((depMetric) => {
-            if (depMetric) {
-              // Make sure the dependency is valid
-              metricsWithDependencies.add(depMetric);
-              console.log(
-                `Added Instagram dependency ${depMetric} for ${metricId}`
-              );
-            }
-          });
-        }
-      });
-    }
-    // Handle LinkedIn metrics
-    else if (networkType === "linkedin_company" || networkType === "linkedin") {
-      // Find dependencies for selected metrics from the LINKEDIN_CALCULATED_METRICS
-      selectedMetrics.forEach((metricId) => {
-        if (!metricId) return; // Skip null/undefined metrics
-
-        const calculatedMetric = LINKEDIN_CALCULATED_METRICS.find(
-          (m) => m.id === metricId
-        );
-
-        if (calculatedMetric && calculatedMetric.dependsOn) {
-          calculatedMetric.dependsOn.forEach((depMetric) => {
-            if (depMetric) {
-              // Make sure the dependency is valid
-              metricsWithDependencies.add(depMetric);
-              console.log(
-                `Added LinkedIn dependency ${depMetric} for ${metricId}`
-              );
-            }
-          });
-        }
-      });
-    }
-    // Handle Twitter (X) metrics
-    else if (networkType === "twitter") {
-      // Find dependencies for selected metrics from the TWITTER_CALCULATED_METRICS
-      selectedMetrics.forEach((metricId) => {
-        if (!metricId) return; // Skip null/undefined metrics
-
-        const calculatedMetric = TWITTER_CALCULATED_METRICS.find(
-          (m) => m.id === metricId
-        );
-
-        if (calculatedMetric && calculatedMetric.dependsOn) {
-          calculatedMetric.dependsOn.forEach((depMetric) => {
-            if (depMetric) {
-              // Make sure the dependency is valid
-              metricsWithDependencies.add(depMetric);
-              console.log(
-                `Added Twitter dependency ${depMetric} for ${metricId}`
-              );
-            }
-          });
-        }
-      });
-    }
-
-    const result = Array.from(metricsWithDependencies).filter(Boolean); // Filter out null/undefined
-    console.log(`Final metrics for ${networkType}:`, result);
-    return result;
+    // Convert Set back to array
+    return Array.from(allMetrics);
   };
 
   /**
@@ -660,409 +673,170 @@ const Analytics = ({ profiles, customerId }) => {
    */
   const exportToExcel = async (data) => {
     try {
-      if (!data || data.length === 0) {
-        setError("No data available to export");
-        return;
-      }
-
       // Create a new workbook
-      const wb = XLSX.utils.book_new();
+      const workbook = new ExcelJS.Workbook();
 
-      // Track used sheet names to prevent duplicates
-      const usedSheetNames = new Set();
-
-      // Group data by profile_id
+      // Group data by profile
       const profilesData = {};
-
-      // First pass - collect all profiles
       data.forEach((row) => {
-        const profileId = row.profile_id || "unknown";
-        const network = row.Network || "Unknown";
-
+        const profileId = row.profile_id;
         if (!profilesData[profileId]) {
-          // Get profile information from profilesMap
-          const foundProfile =
-            profilesMap[profileId] ||
-            profiles.find(
-              (p) => p.customer_profile_id.toString() === profileId.toString()
-            );
-
-          // Store profile name and network info
-          profilesData[profileId] = {
-            network,
-            profileObj: foundProfile, // Store the entire profile object for later reference
-            profileName: foundProfile
-              ? foundProfile.name || foundProfile.native_name || profileId
-              : profileId,
-            rows: [],
-          };
+          profilesData[profileId] = [];
         }
-
-        profilesData[profileId].rows.push(row);
+        profilesData[profileId].push(row);
       });
 
-      // Sort each profile's data by date
-      Object.keys(profilesData).forEach((profileId) => {
-        profilesData[profileId].rows.sort((a, b) => {
-          // Sort logic remains the same
-          const aDateStr = a.Date;
-          const bDateStr = b.Date;
+      // Process each profile's data
+      for (const [profileId, profileRows] of Object.entries(profilesData)) {
+        // Sort rows by date
+        profileRows.sort((a, b) => new Date(a.Date) - new Date(b.Date));
 
-          // If date strings include FY or Q1-Q4, they're already in fiscal format
-          const isFiscalFormat =
-            (aDateStr && aDateStr.includes("FY")) ||
-            (bDateStr && bDateStr.includes("FY"));
+        // Get the network type from the first row
+        const networkType = profileRows[0].Network;
 
-          if (isFiscalFormat) {
-            // For fiscal formats, use string comparison
-            return aDateStr.localeCompare(bDateStr);
-          }
+        // Create a worksheet for this profile
+        const profileName = profileRows[0]["Profile Name"];
+        let sheetName = `${profileName} (${NETWORK_DISPLAY_NAMES[networkType]})`;
 
-          // For month names like "January 2023"
-          const monthNames = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
-          ];
-
-          // Check if both dates use month name format
-          const aMonthFormat = monthNames.some(
-            (month) => aDateStr && aDateStr.includes(month)
-          );
-          const bMonthFormat = monthNames.some(
-            (month) => bDateStr && bDateStr.includes(month)
-          );
-
-          if (aMonthFormat && bMonthFormat) {
-            // Extract year and month for comparison
-            const aYear = parseInt(aDateStr.match(/\d{4}/)?.[0] || "0");
-            const bYear = parseInt(bDateStr.match(/\d{4}/)?.[0] || "0");
-
-            if (aYear !== bYear) return aYear - bYear;
-
-            // Find month index
-            const aMonthIndex = monthNames.findIndex((month) =>
-              aDateStr.includes(month)
-            );
-            const bMonthIndex = monthNames.findIndex((month) =>
-              bDateStr.includes(month)
-            );
-
-            return aMonthIndex - bMonthIndex;
-          }
-
-          // Default: use date object comparison for regular dates
-          return new Date(aDateStr) - new Date(bDateStr);
-        });
-      });
-
-      // For each profile, create a worksheet
-      for (const [profileId, profileData] of Object.entries(profilesData)) {
-        // Use the profile object stored earlier
-        const profileObj = profileData.profileObj;
-        const profileName = profileData.profileName;
-        const networkType = profileData.network;
-        const networkDisplay =
-          NETWORK_DISPLAY_NAMES[networkType] || networkType;
-
-        // Create a unique sheet name based on profile name and network with the full ID
-        // to absolutely ensure uniqueness
-        let baseSheetName = `${profileName} - ${networkDisplay}`
-          .substring(0, 20) // Leave room for ID and potential counter
-          .replace(/[\[\]\*\?\/\\\:]/g, "_");
-
-        // Ensure sheet name is unique by adding profile ID
-        let sheetName = `${baseSheetName} (${profileId})`;
-        let counter = 1;
-
-        // Trim if exceeding Excel's 31 character limit
-        if (sheetName.length > 31) {
-          const maxLength = 31 - `(${profileId})`.length;
-          baseSheetName = baseSheetName.substring(0, maxLength);
-          sheetName = `${baseSheetName}(${profileId})`;
+        // Check if sheet name already exists and add timestamp if needed
+        let sheet = workbook.getWorksheet(sheetName);
+        if (sheet) {
+          const timestamp = new Date().getTime();
+          sheetName = `${sheetName}_${timestamp}`;
         }
 
-        while (usedSheetNames.has(sheetName)) {
-          // Add counter for truly exceptional cases of collision
-          sheetName = `${baseSheetName}(${profileId}_${counter})`;
-          counter++;
+        sheet = workbook.addWorksheet(sheetName);
 
-          // Ensure we stay within Excel's 31 character limit
-          if (sheetName.length > 31) {
-            const maxLength = 31 - `(${profileId}_${counter})`.length;
-            baseSheetName = baseSheetName.substring(0, maxLength);
-            sheetName = `${baseSheetName}(${profileId}_${counter})`;
-          }
-        }
-
-        // Add this sheet name to used names
-        usedSheetNames.add(sheetName);
-
-        // Process the data for Excel including adding totals
-        const processedData = [];
-
-        // Calculate totals and find last values for each metric
-        const totals = {};
-        const lastValues = {};
-
-        // Get the first row to identify metrics
-        const firstRow = profileData.rows[0] || {};
-        const metrics = Object.keys(firstRow).filter(
-          (key) =>
-            key !== "Date" &&
-            key !== "Network" &&
-            key !== "profile_id" &&
-            key !== "Profile Name" &&
-            !key.includes("followers_count")
-        );
-
-        // Identify rate metrics that need special handling
-        const rateMetrics = metrics.filter(
-          (key) =>
-            key.includes("engagement_rate_per_follower") ||
-            key.includes("engagement_rate_per_impression")
-        );
-
-        // Track the component values needed for calculating rates
-        const rateComponents = {
-          calculated_engagements: 0,
-          impressions: 0,
-          lifetime_snapshot_followers_count: 0,
-        };
-
-        // Initialize totals
-        metrics.forEach((metric) => {
-          totals[metric] = 0;
-          lastValues[metric] = null;
-        });
-
-        // Process each row and calculate totals
-        profileData.rows.forEach((row, index) => {
-          const formattedRow = { ...row };
-
-          // Always set the Profile Name to ensure consistency
-          formattedRow["Profile Name"] = profileName;
-
-          // Replace profile_id with profile name if it exists
-          if ("profile_id" in formattedRow) {
-            // Remove the original profile_id property
-            delete formattedRow.profile_id;
-          }
-
-          // Format rate metrics as percentages
-          Object.keys(formattedRow).forEach((key) => {
-            // Check if this is a rate metric that should be formatted as percentage
-            const isRateMetric = key.includes("rate") || key.includes("Rate");
-
-            if (isRateMetric && typeof formattedRow[key] === "number") {
-              // Format as percentage with 2 decimal places
-              formattedRow[key] = formattedRow[key] * 100;
-            }
-
-            // Calculate totals for numeric values (except follower counts)
+        // Get all available metrics for this network
+        const availableMetrics = new Set();
+        profileRows.forEach((row) => {
+          Object.keys(row).forEach((key) => {
             if (
-              typeof formattedRow[key] === "number" &&
-              !key.includes("followers_count") &&
-              key !== "Date" &&
-              key !== "Network" &&
-              key !== "Profile Name"
+              !["Date", "Network", "profile_id", "Profile Name"].includes(key)
             ) {
-              // Don't total up rate metrics, we'll calculate them later based on components
-              if (!rateMetrics.includes(key)) {
-                totals[key] = (totals[key] || 0) + formattedRow[key];
-              }
-
-              // Track component values for rate calculations if present
-              if (key === "calculated_engagements") {
-                rateComponents.calculated_engagements += formattedRow[key];
-              }
-              if (key === "impressions") {
-                rateComponents.impressions += formattedRow[key];
-              }
-
-              lastValues[key] = formattedRow[key]; // Store the last value
-            }
-
-            // Track the last follower count for rate calculations
-            if (
-              key === "lifetime_snapshot.followers_count" &&
-              formattedRow[key] !== null
-            ) {
-              // For follower count, we'll use the last value for calculations
-              rateComponents.lifetime_snapshot_followers_count =
-                formattedRow[key];
-            }
-
-            // Convert any objects or arrays to strings
-            if (
-              typeof formattedRow[key] === "object" &&
-              formattedRow[key] !== null
-            ) {
-              formattedRow[key] = JSON.stringify(formattedRow[key]);
+              availableMetrics.add(key);
             }
           });
-
-          processedData.push(formattedRow);
         });
 
-        // Add a total row
-        const totalRow = {
-          Date: "TOTAL",
-          Network: profileData.network,
-          "Profile Name": profileName,
-        };
+        // Add headers
+        const headers = ["Date", ...Array.from(availableMetrics)];
+        sheet.addRow(headers);
 
-        // Add a last value row
-        const lastRow = {
-          Date: "LAST VALUE",
-          Network: profileData.network,
-          "Profile Name": profileName,
-        };
-
-        // Add the totals and last values for each metric
-        metrics.forEach((metric) => {
-          // For rate metrics, calculate them properly instead of summing
-          if (metric === "engagement_rate_per_follower") {
-            // Calculate based on components: engagements / followers
-            if (rateComponents.lifetime_snapshot_followers_count > 0) {
-              totalRow[metric] =
-                (rateComponents.calculated_engagements /
-                  rateComponents.lifetime_snapshot_followers_count) *
-                100;
-            } else {
-              totalRow[metric] = "N/A";
-            }
-          } else if (metric === "engagement_rate_per_impression") {
-            // Calculate based on components: engagements / impressions
-            if (rateComponents.impressions > 0) {
-              totalRow[metric] =
-                (rateComponents.calculated_engagements /
-                  rateComponents.impressions) *
-                100;
-            } else {
-              totalRow[metric] = "N/A";
-            }
-          } else {
-            // For non-rate metrics, use the sum
-            totalRow[metric] = totals[metric];
-          }
-
-          lastRow[metric] = lastValues[metric];
+        // Add data rows
+        profileRows.forEach((row) => {
+          const dataRow = [row.Date];
+          headers.slice(1).forEach((metric) => {
+            dataRow.push(row[metric] || 0);
+          });
+          sheet.addRow(dataRow);
         });
 
-        // Add follower count to last row but not to total
-        const followerCountKeys = Object.keys(firstRow).filter((key) =>
-          key.includes("followers_count")
-        );
-
-        followerCountKeys.forEach((key) => {
-          const lastRowWithFollowers = [...profileData.rows]
-            .reverse()
-            .find((row) => row[key] !== undefined && row[key] !== null);
-
-          if (lastRowWithFollowers) {
-            lastRow[key] = lastRowWithFollowers[key];
-            totalRow[key] = "N/A"; // Not applicable for totals
-          }
+        // Calculate totals and add them at the bottom
+        const totalRow = ["Total"];
+        headers.slice(1).forEach((metric) => {
+          const values = profileRows.map((row) => row[metric] || 0);
+          const total = values.reduce((sum, val) => sum + val, 0);
+          totalRow.push(total);
         });
+        sheet.addRow(totalRow);
 
-        // Add the total and last rows to the processed data
-        processedData.push(totalRow, lastRow);
+        // Add last value row
+        const lastRow = ["Last Value"];
+        headers.slice(1).forEach((metric) => {
+          const lastValue = profileRows[profileRows.length - 1][metric] || 0;
+          lastRow.push(lastValue);
+        });
+        sheet.addRow(lastRow);
 
-        // Create worksheet
-        const ws = XLSX.utils.json_to_sheet(processedData);
+        // Calculate and add rate metrics
+        const rateMetrics = Object.entries(
+          CALCULATED_METRICS[networkType] || {}
+        )
+          .filter(([_, metric]) => metric.dependencies)
+          .map(([id, metric]) => ({
+            id,
+            ...metric,
+          }));
 
-        // Add percentage formatting for rate columns
-        const range = XLSX.utils.decode_range(ws["!ref"]);
+        if (rateMetrics.length > 0) {
+          sheet.addRow([]); // Add empty row for separation
+          sheet.addRow(["Rate Metrics"]);
 
-        // Check each column header to see if it's a rate
-        for (let C = range.s.c; C <= range.e.c; C++) {
-          const headerCellRef = XLSX.utils.encode_cell({ r: 0, c: C });
-          const headerCell = ws[headerCellRef];
+          // Add headers for rate metrics
+          const rateHeaders = ["Metric", "Value"];
+          sheet.addRow(rateHeaders);
 
-          if (
-            headerCell &&
-            (headerCell.v.includes("rate") || headerCell.v.includes("Rate"))
-          ) {
-            // Apply percentage format to all cells in this column
-            for (let R = 1; R <= range.e.r; R++) {
-              const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-              if (ws[cellRef]) {
-                ws[cellRef].z = '0.00"%"';
-              }
-            }
-          }
+          // Calculate and add each rate metric
+          rateMetrics.forEach((metric) => {
+            const lastValues = {};
+            metric.dependencies.forEach((dep) => {
+              lastValues[dep] = profileRows[profileRows.length - 1][dep] || 0;
+            });
+
+            const rateValue = metric.calculate(lastValues);
+            sheet.addRow([metric.label, `${rateValue.toFixed(2)}%`]);
+          });
         }
 
-        // Add the worksheet to the workbook
-        try {
-          XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        } catch (sheetError) {
-          console.error(`Error adding worksheet ${sheetName}:`, sheetError);
+        // Style the worksheet
+        sheet.getColumn(1).width = 15; // Date column
+        headers.forEach((_, index) => {
+          sheet.getColumn(index + 1).width = 15;
+        });
 
-          // If this is a duplicate sheet name error, try one more approach with a timestamp
-          if (
-            sheetError.message &&
-            sheetError.message.includes("already exists")
-          ) {
-            // Use timestamp to ensure uniqueness
-            const timestamp = new Date().getTime().toString().slice(-6);
-            const fallbackName = `Sheet_${timestamp}`;
+        // Style headers
+        const headerRow = sheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE0E0E0" },
+        };
 
-            try {
-              XLSX.utils.book_append_sheet(wb, ws, fallbackName);
-            } catch (fallbackError) {
-              console.error(`Failed to add with fallback name:`, fallbackError);
-              // Continue with the loop to process other profiles
-            }
-          }
-        }
+        // Style total and last value rows
+        const totalRowIndex =
+          sheet.rowCount -
+          (rateMetrics.length > 0 ? rateMetrics.length + 3 : 1);
+        const lastRowIndex = totalRowIndex + 1;
+
+        const totalRowStyle = sheet.getRow(totalRowIndex);
+        const lastRowStyle = sheet.getRow(lastRowIndex);
+
+        [totalRowStyle, lastRowStyle].forEach((row) => {
+          row.font = { bold: true };
+          row.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF0F0F0" },
+          };
+        });
       }
 
-      // Generate filename with date range
-      const startStr = safeFormat(startDate, "yyyy-MM-dd");
-      const endStr = safeFormat(endDate, "yyyy-MM-dd");
-      let formatStr = "";
+      // Generate filename based on date range and format
+      const startDateStr = safeFormat(startDate, "yyyy-MM-dd");
+      const endDateStr = safeFormat(endDate, "yyyy-MM-dd");
+      const formatStr =
+        exportFormat.charAt(0).toUpperCase() + exportFormat.slice(1);
+      const filename = `Analytics_${formatStr}_${startDateStr}_to_${endDateStr}.xlsx`;
 
-      // Include the export format in the filename
-      switch (exportFormat) {
-        case "monthly":
-          formatStr = "_Monthly";
-          break;
-        case "quarterly":
-          formatStr = "_Quarterly";
-          break;
-        case "yearly":
-          formatStr = "_Yearly";
-          break;
-        default:
-          formatStr = "_Daily";
-      }
+      // Save the workbook
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      window.URL.revokeObjectURL(url);
 
-      // Limit filename length to avoid issues
-      let filename = `SproutSocial_Analytics${formatStr}_${startStr}_to_${endStr}.xlsx`;
-      if (filename.length > 200) {
-        // If filename is too long, create a shorter version
-        filename = `SproutSocial_Analytics_${exportFormat}_${startStr}_to_${endStr}.xlsx`;
-      }
-
-      // Export the workbook
-      XLSX.writeFile(wb, filename);
-
-      toast.success("Excel file exported successfully!");
+      return true;
     } catch (error) {
-      console.error("Error exporting to Excel:", error);
-      setError(`Error exporting to Excel: ${error.message}`);
-      throw error; // Re-throw to allow proper error handling in calling function
+      console.error("Error in exportToExcel:", error);
+      throw error;
     }
   };
 
@@ -1329,10 +1103,21 @@ const Analytics = ({ profiles, customerId }) => {
         profilesByNetwork
       )) {
         const profileIds = networkProfiles.map((p) => p.customer_profile_id);
-        const selectedMetrics = selectedMetricsByNetwork[networkType] || [];
+
+        // Get the correct metrics key for this network type
+        let metricsKey = networkType;
+        if (networkType === "facebook" || networkType === "fb_page") {
+          metricsKey = "facebook";
+        }
+
+        // Get the selected metrics for this network
+        const selectedMetrics = selectedMetricsByNetwork[metricsKey] || [];
 
         // Get the selected metrics with all dependencies for calculated metrics
-        const apiMetrics = getMetricsWithDependencies(selectedMetrics);
+        const apiMetrics = getMetricsWithDependencies(
+          selectedMetrics,
+          networkType
+        );
 
         try {
           // Always fetch daily data first
@@ -1346,7 +1131,7 @@ const Analytics = ({ profiles, customerId }) => {
           };
 
           console.log(
-            `Making API call for ${networkType} with ${profileIds.length} profiles`
+            `Making API call for ${networkType} with ${profileIds.length} profiles and ${apiMetrics.length} metrics`
           );
           const response = await getProfileAnalytics(apiParams);
 
@@ -1394,6 +1179,11 @@ const Analytics = ({ profiles, customerId }) => {
                 new Date(endDate)
               );
             }
+
+            // Add network information to each row
+            processedData.forEach((row) => {
+              row.Network = networkType;
+            });
 
             allFormattedData.push(...processedData);
           } else {
