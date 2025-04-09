@@ -663,11 +663,13 @@ const Analytics = ({ profiles, customerId }) => {
         // Calculate totals and add them at the bottom
         const totalRow = ["Total"];
         const totals = {};
+        
+        // First, calculate totals for all raw metrics (non-calculated)
         headers.slice(1).forEach((metric) => {
           const values = profileRows.map((row) => row[metric] || 0);
           const total = values.reduce((sum, val) => sum + val, 0);
-          totalRow.push(total);
           totals[metric] = total;
+          totalRow.push(total);
         });
         sheet.addRow(totalRow);
 
@@ -679,63 +681,139 @@ const Analytics = ({ profiles, customerId }) => {
         });
         sheet.addRow(lastRow);
 
-        // Add engagement rate based on totals for Instagram
-        if (
-          networkType === "fb_instagram_account" ||
-          networkType === "instagram"
-        ) {
-          sheet.addRow([]); // Empty row for spacing
-          const totalEngagements =
-            (totals.likes || 0) +
-            (totals.comments_count || 0) +
+        // Calculate and add rate metrics for all networks
+        sheet.addRow([]); // Add empty row for separation
+        sheet.addRow(["Calculated Metrics (Based on Totals)"]);
+
+        // Add headers for calculated metrics
+        const rateHeaders = ["Metric", "Value"];
+        sheet.addRow(rateHeaders);
+
+        // Calculate engagement metrics based on totals for each network type
+        if (networkType === "fb_instagram_account" || networkType === "instagram") {
+          // Calculate total engagements for Instagram
+          const totalEngagements = 
+            (totals.likes || 0) + 
+            (totals.comments_count || 0) + 
+            (totals.shares_count || 0) + 
             (totals.saves || 0);
+          
+          // Add total engagements row
+          sheet.addRow(["Total Engagements", totalEngagements]);
+          
+          // Calculate engagement rate using totals
           const totalImpressions = totals.impressions || 0;
-          const overallEngagementRate =
-            totalImpressions > 0
-              ? (totalEngagements / totalImpressions) * 100
-              : 0;
-          sheet.addRow([
-            "Overall Engagement Rate",
-            `${overallEngagementRate.toFixed(2)}%`,
-          ]);
+          if (totalImpressions > 0) {
+            const engagementRate = (totalEngagements / totalImpressions) * 100;
+            sheet.addRow(["Engagement Rate", `${engagementRate.toFixed(2)}%`]);
+          }
+        } else if (networkType === "facebook") {
+          // Calculate total engagements for Facebook
+          const totalEngagements = 
+            (totals.reactions || 0) + 
+            (totals.comments_count || 0) + 
+            (totals.shares_count || 0);
+          
+          // Add total engagements row
+          sheet.addRow(["Total Engagements", totalEngagements]);
+          
+          // Calculate engagement rate using totals
+          const totalImpressions = totals.impressions || 0;
+          if (totalImpressions > 0) {
+            const engagementRate = (totalEngagements / totalImpressions) * 100;
+            sheet.addRow(["Engagement Rate", `${engagementRate.toFixed(2)}%`]);
+          }
+        } else if (networkType === "linkedin_company") {
+          // Calculate total engagements for LinkedIn
+          const totalEngagements = 
+            (totals.reactions || 0) + 
+            (totals.comments_count || 0) + 
+            (totals.shares_count || 0) + 
+            (totals.clicks || 0);
+          
+          // Add total engagements row
+          sheet.addRow(["Total Engagements", totalEngagements]);
+          
+          // Calculate engagement rate using totals
+          const totalImpressions = totals.impressions || 0;
+          if (totalImpressions > 0) {
+            const engagementRate = (totalEngagements / totalImpressions) * 100;
+            sheet.addRow(["Engagement Rate", `${engagementRate.toFixed(2)}%`]);
+          }
+        } else if (networkType === "twitter") {
+          // Calculate total engagements for Twitter
+          const totalEngagements = 
+            (totals.likes || 0) + 
+            (totals.comments_count || 0) + 
+            (totals.shares_count || 0) + 
+            (totals.post_link_clicks || 0) + 
+            (totals.post_content_clicks_other || 0) + 
+            (totals.engagements_other || 0);
+          
+          // Add total engagements row
+          sheet.addRow(["Total Engagements", totalEngagements]);
+          
+          // Calculate engagement rate using totals
+          const totalImpressions = totals.impressions || 0;
+          if (totalImpressions > 0) {
+            const engagementRate = (totalEngagements / totalImpressions) * 100;
+            sheet.addRow(["Engagement Rate", `${engagementRate.toFixed(2)}%`]);
+          }
+        } else if (networkType === "youtube") {
+          // Calculate total engagements for YouTube
+          const totalEngagements = 
+            (totals.likes || 0) + 
+            (totals.comments_count || 0) + 
+            (totals.shares_count || 0);
+          
+          // Add total engagements row
+          sheet.addRow(["Total Engagements", totalEngagements]);
+          
+          // Calculate engagement rate using totals
+          const totalViews = totals.video_views || 0;
+          if (totalViews > 0) {
+            const engagementRate = (totalEngagements / totalViews) * 100;
+            sheet.addRow(["Engagement Rate", `${engagementRate.toFixed(2)}%`]);
+          }
         }
 
-        // Calculate and add rate metrics (keep existing rate metrics for other networks)
+        // Calculate Net Follower Growth Percentage
+        const currentFollowers = totals["lifetime_snapshot.followers_count"] || 0;
+        const netGrowth = totals.net_follower_growth || 0;
+        const startFollowers = currentFollowers - netGrowth;
+        
+        if (startFollowers > 0) {
+          const growthPercentage = (netGrowth / startFollowers) * 100;
+          sheet.addRow(["Net Follower Growth (%)", `${growthPercentage.toFixed(2)}%`]);
+        }
+
+        // Calculate other rate metrics using totals
         const rateMetrics = Object.entries(
           CALCULATED_METRICS[networkType] || {}
         )
           .filter(([_, metric]) => metric.dependencies)
-          .filter(
-            ([id, _]) =>
-              !(
-                networkType === "fb_instagram_account" ||
-                networkType === "instagram"
-              )
-          ) // Skip for Instagram
           .map(([id, metric]) => ({
             id,
             ...metric,
           }));
 
-        if (rateMetrics.length > 0) {
-          sheet.addRow([]); // Add empty row for separation
-          sheet.addRow(["Rate Metrics"]);
-
-          // Add headers for rate metrics
-          const rateHeaders = ["Metric", "Value"];
-          sheet.addRow(rateHeaders);
-
-          // Calculate and add each rate metric
-          rateMetrics.forEach((metric) => {
-            const lastValues = {};
-            metric.dependencies.forEach((dep) => {
-              lastValues[dep] = profileRows[profileRows.length - 1][dep] || 0;
-            });
-            const rateValue = metric.calculate(lastValues);
-            sheet.addRow([metric.label, `${rateValue.toFixed(2)}%`]);
+        rateMetrics.forEach((metric) => {
+          // Skip metrics we've already calculated above
+          if (metric.id === "engagement_rate" || metric.id === "net_follower_growth_percentage") return;
+          
+          // Use totals for calculating other rate metrics
+          const totalValues = {};
+          metric.dependencies.forEach((dep) => {
+            totalValues[dep] = totals[dep] || 0;
           });
-        }
-
+          
+          try {
+            const rateValue = metric.calculate(totalValues);
+            sheet.addRow([metric.label, `${rateValue.toFixed(2)}%`]);
+          } catch (error) {
+            console.error(`Error calculating ${metric.id}:`, error);
+          }
+        });
         // Style the worksheet
         sheet.getColumn(1).width = 15; // Date column
         headers.forEach((_, index) => {
@@ -1422,7 +1500,7 @@ const Analytics = ({ profiles, customerId }) => {
                             selectedProfiles.filter(
                               (id) =>
                                 !networkProfiles.some(
-                                  (p) => p.customer_profile_id === id
+                                  (profile) => profile.customer_profile_id === id
                                 )
                             )
                           );

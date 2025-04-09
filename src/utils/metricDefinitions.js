@@ -112,6 +112,30 @@ export const FACEBOOK_CALCULATED_METRICS = [
       return result;
     },
   },
+  {
+    id: "net_follower_growth_percentage",
+    label: "Net Follower Growth (%)",
+    isCalculated: true,
+    dependsOn: ["net_follower_growth", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get the follower count at start of period (current - net growth)
+      const currentFollowers = metrics.lifetime_snapshot?.followers_count || 
+                               metrics?.["lifetime_snapshot.followers_count"] || 0;
+      const netGrowth = metrics.net_follower_growth || 0;
+      const startFollowers = currentFollowers - netGrowth;
+      
+      // Avoid division by zero
+      if (!startFollowers || startFollowers === 0) {
+        console.log("No starting followers found, returning 0");
+        return 0;
+      }
+      
+      // Calculate percentage growth
+      const result = (netGrowth / startFollowers) * 100;
+      console.log(`Net follower growth percentage: ${result}%`);
+      return result;
+    },
+  },
 ];
 
 /**
@@ -210,6 +234,30 @@ export const INSTAGRAM_CALCULATED_METRICS = [
       return result;
     },
   },
+  {
+    id: "net_follower_growth_percentage",
+    label: "Net Follower Growth (%)",
+    isCalculated: true,
+    dependsOn: ["net_follower_growth", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get the follower count at start of period (current - net growth)
+      const currentFollowers = metrics.lifetime_snapshot?.followers_count || 
+                               metrics?.["lifetime_snapshot.followers_count"] || 0;
+      const netGrowth = metrics.net_follower_growth || 0;
+      const startFollowers = currentFollowers - netGrowth;
+      
+      // Avoid division by zero
+      if (!startFollowers || startFollowers === 0) {
+        console.log("No starting followers found, returning 0");
+        return 0;
+      }
+      
+      // Calculate percentage growth
+      const result = (netGrowth / startFollowers) * 100;
+      console.log(`Instagram net follower growth percentage: ${result}%`);
+      return result;
+    },
+  },
 ];
 
 /**
@@ -304,6 +352,30 @@ export const LINKEDIN_CALCULATED_METRICS = [
       return result;
     },
   },
+  {
+    id: "net_follower_growth_percentage",
+    label: "Net Follower Growth (%)",
+    isCalculated: true,
+    dependsOn: ["net_follower_growth", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get the follower count at start of period (current - net growth)
+      const currentFollowers = metrics.lifetime_snapshot?.followers_count || 
+                               metrics?.["lifetime_snapshot.followers_count"] || 0;
+      const netGrowth = metrics.net_follower_growth || 0;
+      const startFollowers = currentFollowers - netGrowth;
+      
+      // Avoid division by zero
+      if (!startFollowers || startFollowers === 0) {
+        console.log("No starting followers found, returning 0");
+        return 0;
+      }
+      
+      // Calculate percentage growth
+      const result = (netGrowth / startFollowers) * 100;
+      console.log(`LinkedIn net follower growth percentage: ${result}%`);
+      return result;
+    },
+  },
 ];
 
 /**
@@ -366,6 +438,30 @@ export const YOUTUBE_CALCULATED_METRICS = [
       const minutesWatched = metrics.estimated_minutes_watched || 0;
       const result = minutesWatched / metrics.video_views;
       console.log(`YouTube average view duration: ${result} minutes`);
+      return result;
+    },
+  },
+  {
+    id: "net_follower_growth_percentage",
+    label: "Net Subscriber Growth (%)",
+    isCalculated: true,
+    dependsOn: ["net_follower_growth", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get the subscriber count at start of period (current - net growth)
+      const currentFollowers = metrics.lifetime_snapshot?.followers_count || 
+                               metrics?.["lifetime_snapshot.followers_count"] || 0;
+      const netGrowth = metrics.net_follower_growth || 0;
+      const startFollowers = currentFollowers - netGrowth;
+      
+      // Avoid division by zero
+      if (!startFollowers || startFollowers === 0) {
+        console.log("No starting subscribers found, returning 0");
+        return 0;
+      }
+      
+      // Calculate percentage growth
+      const result = (netGrowth / startFollowers) * 100;
+      console.log(`YouTube net subscriber growth percentage: ${result}%`);
       return result;
     },
   },
@@ -469,6 +565,30 @@ export const TWITTER_CALCULATED_METRICS = [
       return result;
     },
   },
+  {
+    id: "net_follower_growth_percentage",
+    label: "Net Follower Growth (%)",
+    isCalculated: true,
+    dependsOn: ["net_follower_growth", "lifetime_snapshot.followers_count"],
+    calculate: (metrics) => {
+      // Get the follower count at start of period (current - net growth)
+      const currentFollowers = metrics.lifetime_snapshot?.followers_count || 
+                               metrics?.["lifetime_snapshot.followers_count"] || 0;
+      const netGrowth = metrics.net_follower_growth || 0;
+      const startFollowers = currentFollowers - netGrowth;
+      
+      // Avoid division by zero
+      if (!startFollowers || startFollowers === 0) {
+        console.log("No starting followers found, returning 0");
+        return 0;
+      }
+      
+      // Calculate percentage growth
+      const result = (netGrowth / startFollowers) * 100;
+      console.log(`Twitter net follower growth percentage: ${result}%`);
+      return result;
+    },
+  },
 ];
 
 /**
@@ -542,5 +662,6 @@ export function getPercentageFormattedMetrics() {
     "engagement_rate_per_follower",
     "engagement_rate_per_reach",
     "click_through_rate",
+    "net_follower_growth_percentage",
   ]);
 }
