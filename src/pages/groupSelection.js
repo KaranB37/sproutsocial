@@ -112,6 +112,8 @@ export default function GroupSelectionPage() {
       group.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // abc  
+
   const getRandomColor = (str) => {
     const colors = [
       "bg-blue-500",
