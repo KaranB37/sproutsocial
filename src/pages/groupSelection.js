@@ -97,10 +97,18 @@ export default function GroupSelectionPage() {
     );
   }
 
-  // Filter groups based on search term and allowed groups
+  // Filter groups based on search term and exclude specific group IDs
+  const excludedGroupIds = [
+    2516432, // xyz
+    2524506, // Castrol
+    2549821, 2549827, 2549828, 2549833, 2549838, 2549839, // LSM
+    2550692, 2550694, 2550696, // Maybelline
+    2560861 // JioHotstar
+  ];
+  
   const filteredGroups = groups.filter(
     (group) =>
-      (group.name === "Schbang" || group.name === "Level SuperMind") &&
+      !excludedGroupIds.includes(group.group_id) &&
       group.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 

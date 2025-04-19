@@ -25,12 +25,7 @@ export default function Home() {
         setCustomerId(newCustomerId);
         const profilesData = await getProfiles(newCustomerId);
 
-        // Filter profiles by group ID if provided
-        const filteredProfiles = groupId
-          ? profilesData.filter((profile) =>
-              profile.groups.includes(parseInt(groupId))
-            )
-          : profilesData;
+        const filteredProfiles = profilesData
 
         setProfiles(filteredProfiles);
         setLoading(false);
